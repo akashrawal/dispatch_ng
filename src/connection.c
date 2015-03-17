@@ -20,6 +20,18 @@
 
 #include "connection.h"
 
+#define 
+
+typedef struct 
+{
+	GPollFD fd;
+	char buffer
+}
+
+
+
+//Old code
+#if 0
 
 typedef struct
 {
@@ -225,26 +237,7 @@ gpointer connection_main(gpointer thread_data)
 			goto fail;
 		}
 		
-		//Resolve it
-		sprintf(port_str, "%d", (int) ntohs(port));
-		hints.ai_flags = 0;
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_protocol = 0;
-		hints.ai_addrlen = 0;
-		hints.ai_addr = NULL;
-		hints.ai_canonname = NULL;
-		hints.ai_next = NULL;
 		
-		resolve_status = getaddrinfo(buffer, port_str, &hints, &addrs);
-		
-		//Error checking
-		if (resolve_status != 0)
-		{
-			msg("Could not resolve \"%s\": %s", 
-				gai_strerror(resolve_status));
-			goto fail;
-		}
 		
 		//Get interface
 		addr_type = 0;
@@ -360,3 +353,5 @@ void connection_run(int fd, Interface *interface)
 	g_thread_unref(g_thread_new
 		(NULL, connection_main, (gpointer) data));
 }
+
+#endif

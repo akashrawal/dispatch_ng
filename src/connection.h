@@ -22,5 +22,7 @@
 #define CONNECTION_H
 
 #include "interface.h"
+#include "resolver.h"
+#include "channel.h"
 
 #endif //CONNECTION_H

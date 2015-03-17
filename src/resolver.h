@@ -23,8 +23,17 @@
 
 #include "utils.h"
 
-typedef void (*ResolverCB) 
-	(int status, struct addrinfo *addrs, gpointer data);
+typedef struct
+{
+	int status;
+	struct addrinfo *addrs;
+	ResolverCB cb;
+	gpointer data;
+	int port;
+	char name[1];
+} ResolverData;
+
+typedef void (*ResolverCB)(ResolverData *info);
 
 void resolver_resolve
 	(const char *name, int port, ResolverCB cb, gpointer data);

@@ -24,6 +24,8 @@
 
 #include "utils.h"
 
+#define CHANNEL_BUFFER (1024)
+
 //Add a channel to default context
 guint channel_add(int fd1, int fd2, Interface iface);
 

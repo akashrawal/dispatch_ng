@@ -21,8 +21,6 @@
 
 #include "channel.h"
 
-#define CHANNEL_BUFFER (1024)
-
 //'Joins' two sockets together
 typedef struct
 {

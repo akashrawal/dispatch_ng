@@ -20,18 +20,61 @@
 
 #include "resolver.h"
 
-//Domain name resolver
-
-
-typedef struct
+gboolean resolver_idle(gpointer data)
 {
-	int status;
-	struct addrinfo *addrs;
-	gpointer data;
-} ResolverData;
+	ResolverData *info = (ResolverData *) data;
+	
+	//Call callback and free structure
+	(* info->cb)(info);
+	
+	//Free data
+	freeaddrinfo(info->addrs);
+	g_free(data);
+	
+	return G_SOURCE_REMOVE;
+}
+
+
+gpointer resolver_thread(gpointer data)
+{
+	ResolverData *info = (ResolverData *) data;
+	char port_str[16];
+	struct addrinfo hints;
+	
+	//Resolve it
+	sprintf(port_str, "%d", info->port);
+	hints.ai_flags = 0;
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = 0;
+	hints.ai_addrlen = 0;
+	hints.ai_addr = NULL;
+	hints.ai_canonname = NULL;
+	hints.ai_next = NULL;
+	
+	info->status = getaddrinfo
+		(info->name, port_str, &hints, &(info->addrs));
+	
+	//Add idle handler
+	g_idle_add(resolver_idle, data);
+	
+	return NULL;
+}
 
 void resolver_resolve
 	(const char *name, int port, ResolverCB cb, gpointer data)
 {
+	ResolverData *info;
 	
+	info = (ResolverData *) g_malloc
+		(sizeof(ResolverData) + strlen(name));
+	
+	info->status = 0;
+	info->addrs = NULL;
+	info->cb = cb;
+	info->data = NULL;
+	info->port = port;
+	strcpy(info->name, name);
+	
+	g_thread_unref(g_thread_new(NULL, resolver_thread, info));
 }
