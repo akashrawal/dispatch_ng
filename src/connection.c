@@ -24,11 +24,21 @@
 
 typedef struct 
 {
+	GSource source;
+	
 	GPollFD fd;
-	char buffer
+	struct
+	{
+		char mem[CHANNEL_BUFFER];
+		int start, end;
+	} in_buffer, out_buffer;
+	int status;
+} Connection;
+
+void connection_discard(Connection *connection, int bytes)
+{
+	connection->start += bytes;
 }
-
-
 
 //Old code
 #if 0
