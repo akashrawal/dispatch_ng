@@ -1,5 +1,6 @@
-/* connection.h
- * Handles client connections.
+/* channel.h
+ * Event source to join two sockets together so that data transfer
+ * takes place between them
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -17,10 +18,13 @@
  * You should have received a copy of the GNU General Public License
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
+ 
+#ifndef CHANNEL_H
+#define CHANNEL_H
 
-#ifndef CONNECTION_H
-#define CONNECTION_H
+#include "utils.h"
 
-#include "interface.h"
+//Add a channel to default context
+guint channel_add(int fd1, int fd2, Interface iface);
 
-#endif //CONNECTION_H
+#endif //CHANNEL_H

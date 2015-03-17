@@ -1,4 +1,4 @@
-/* interface.h
+/* interface.c
  * Handles outgoing addresses
  * 
  * Copyright 2015 Akash Rawal

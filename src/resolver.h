@@ -1,5 +1,5 @@
-/* connection.h
- * Handles client connections.
+/* resolver.h
+ * Asynchronously resolves domain names
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -18,9 +18,15 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef CONNECTION_H
-#define CONNECTION_H
+#ifndef RESOLVER_H
+#define RESOLVER_H
 
-#include "interface.h"
+#include "utils.h"
 
-#endif //CONNECTION_H
+typedef void (*ResolverCB) 
+	(int status, struct addrinfo *addrs, gpointer data);
+
+void resolver_resolve
+	(const char *name, int port, ResolverCB cb, gpointer data);
+
+#undef //RESOLVER_H
