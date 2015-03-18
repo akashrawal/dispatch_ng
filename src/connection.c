@@ -20,348 +20,510 @@
 
 #include "connection.h"
 
-#define 
+#define CONNECTION_BUFFER (2048)
 
-typedef struct 
+typedef enum 
 {
-	GSource source;
-	
-	GPollFD fd;
-	struct
-	{
-		char mem[CHANNEL_BUFFER];
-		int start, end;
-	} in_buffer, out_buffer;
-	int status;
-} Connection;
+	CONNECTION_CLIENT = 0,
+	CONNECTION_REMOTE = 1
+};
 
-void connection_discard(Connection *connection, int bytes)
+typedef enum
 {
-	connection->start += bytes;
-}
-
-//Old code
-#if 0
+	CONNECTION_AUTH,
+	CONNECTION_REQUEST,
+	CONNECTION_CONNECTING,
+	CONNECTION_CONNECTED,
+	CONNECTION_CLOSE
+} ConnectionState;
 
 typedef struct
 {
-	int fd;
+	GSource source;
+	
+	struct {
+		GPollFD in_fd;
+		guint8 buffer[CONNECTION_BUFFER];
+		int start, end;
+	} lanes[2];
+	
+	int state;
 	InterfaceManager *manager;
-} ConnectionData;
+	Interface *iface;
+	
+} Connection;
 
-
-
-gpointer connection_main(gpointer thread_data)
+//Peeks on data received from client into buffer.
+static char *connection_peek(Connection *connection, int len)
 {
-	ConnectionData *data = (ConnectionData *) thread_data;
-	int fd;
-	InterfaceManager *manager;
-	Interface *interface = NULL;
+	if (connection->lanes[CONNECTION_CLIENT].start + len 
+		< connection->lanes[CONNECTION_CLIENT].end)
+		return NULL;
+	return connection->lanes[CONNECTION_CLIENT].buffer 
+		+ connection->lanes[CONNECTION_CLIENT].start;
+}
+
+//Returns data received from client into buffer.
+static char *connection_read(Connection *connection, int len)
+{
+	char *res = connection->lanes[CONNECTION_CLIENT].buffer 
+		+ connection->lanes[CONNECTION_CLIENT].start;
+	if (connection->lanes[CONNECTION_CLIENT].start + len 
+		< connection->lanes[CONNECTION_CLIENT].end)
+		return NULL;
+	connection->lanes[CONNECTION_CLIENT].start += len;
+	return res;
+}
+
+//Allocate space on buffer for writing
+static char *connection_write_alloc(Connection *connection, int len)
+{
+	char *res = connection->lanes[CONNECTION_REMOTE].buffer 
+		+ connection->lanes[CONNECTION_REMOTE].end;
+	connection->lanes[CONNECTION_REMOTE].end += len;
+	return res;
+}
+
+//Closes connection, after writing all data
+static void connection_close(Connection *connection)
+{
+	connection->status = CONNECTION_CLOSE;
+	
+	if (connection->lanes[CONNECTION_REMOTE].end 
+			- connection->lanes[CONNECTION_REMOTE].start == 0)
+		g_source_destroy(connection);
+}
+
+static void connection_log
+	(Connection *connection, const char *format, ...)
+{
+	va_list args;
+	
+	va_start(args, format);
+	
+	printf("Connection %d: ", 
+			connection->lanes[CONNECTION_CLIENT].in_fd.fd); 
+	
+	vprintf(format, args);
+	
+	printf("\n"); 
+	
+	va_end(args);
+}
+
+static void connection_write_socks_error
+	(Connection *connection, int socks_errcode)
+{
+	char *buffer;
+	
+	buffer = connection_write_alloc(connection, 10);
+	buffer[0] = 5;
+	buffer[1] = socks_errcode;
+	buffer[2] = 0;
+	buffer[3] = 1;
+	buffer[4] = 0;
+	buffer[5] = 0;
+	buffer[6] = 0;
+	buffer[7] = 0;
+	buffer[8] = 0;
+	buffer[9] = 0;
+	connection_log(connection, 
+		"SOCKS error code %d sent", socks_errcode);
+	connection_close(connection);
+}
+
+void connection_connect_cb(ConnectorData *info)
+{
+	Connection *connection = (Connection *) info->data;
+	guint8 *buffer;
+	int reply_size;
+	
+	//Handle errors
+	if (info->socks_status != 0)
+	{
+		connection_write_socks_error(connection, info->socks_status);
+		return;
+	}
+	
+	//Add reply
+	if (info->iface->addr.sa_family == AF_INET)
+	{
+		reply_size = 10;
+	}
+	else
+	{
+		reply_size = 22;
+	}
+	
+	buffer = connection_write_alloc(connection, reply_size);
+	buffer[0] = 5;
+	buffer[1] = 0;
+	buffer[2] = 0;
+	if (info->iface->addr.sa_family == AF_INET)
+	{
+		struct sockaddr_in *addr;
+			= (struct sockaddr_in *) (info->iface->addr);
+		buffer[3] = 1;
+		memcpy(buffer + 4, &(addr->sin_addr), 4);
+		memcpy(buffer + 8, &(addr->sin_port), 2);
+	}
+	else
+	{
+		struct sockaddr_in6 *addr;
+			= (struct sockaddr_in *) (info->iface->addr);
+		buffer[3] = 4;
+		memcpy(buffer + 4, &(addr->sin6_addr), 16);
+		memcpy(buffer + 20, &(addr->sin6_port), 2);
+	}
+	
+	//Setup connection
+	connection->lanes[1].in_fd.fd = info->remote_fd;
+	connection->iface = info->iface;
+	connection->status = CONNECTION_CONNECTED;
+	
+	//Assertions
+	if (! connection->iface)
+		abort_with_error("Assertion failure");
+}
+
+//Manages all authentication
+void connection_authenticator(Connection *connection)
+{
 	int remote_fd;
+	int i;
+	guint8 *buffer;
 	
-	int io_res, i;
-	guint8 buffer[257];
-	
-	fd = data->fd;
-	manager = data->manager;
-	g_slice_free(ConnectionData, data);
-	
-	//Macro to report messages
-#define msg(...) \
-	do {\
-		printf("Connection %d: ", fd); \
-		printf(__VA_ARGS__); \
-		printf("\n"); \
-	} while(0)
-	
-	//Read SOCKS5 handshake
-	//Version, nmethods
-	io_res = read(fd, buffer, 2);
-	if (io_res < 2)
+	//SOCKS5 handshake
+	if (connection->status == CONNECTION_AUTH)
 	{
-		msg("IO error while reading SOCKS handshake");
-		goto fail;
-	}
-	if (buffer[0] != 5)
-	{
-		msg("Unsupported SOCKS version %d", (int) buffer[0]);
-		goto fail;
-	}
-	
-	{
-		//Methods
-		int nmethods = buffer[1];
-		guint8 selected;
+		int n_methods;
+		guint8 selected = 0xff;
 		
-		io_res = read(fd, buffer, nmethods);
-		if (io_res < nmethods)
+		buffer = connection_peek(connection, 2);
+		if (! buffer)
+			return;
+		
+		if (buffer[0] != 5)
 		{
-			msg("IO error while reading SOCKS handshake");
-			goto fail;
+			connection_log("Unsupported SOCKS version %d", (int) buffer[0]);
+			connection_close(connection);
+			return;
 		}
+		n_methods = buffer[1];
+		buffer = connection_peek(connection, 2 + n_methods);
+		if (! buffer)
+			return;
 		
-		//Select method 0 only
-		selected = 0xff;
-		for (i = 0; i < nmethods; i++)
+		//Select method only
+		for (i = 0; i < n_methods; i++)
 		{
-			if (buffer[i] == 0)
+			if (buffer[2 + i] == 0)
 			{
 				selected = 0;
 				break;
 			}
 		}
 		
-		//Send response
+		//Write reply
+		buffer = connection_write_alloc(connection, 2);
 		buffer[0] = 5;
 		buffer[1] = selected;
-		io_res = write(fd, buffer, 2);
-		if (io_res < 2)
+	
+		if (selected == 0xff)
 		{
-			msg("IO error while writing resonse");
-			goto fail;
+			connection_close(connection);
+			return;
 		}
 		
-		if (selected != 0)
-		{
-			msg("Client does not support method 0");
-			goto fail;
-		}
+		connection_read(connection, 2 + n_methods);
+		connection->status = CONNECTION_REQUEST;
 	}
 	
-	//Read request
-	io_res = read(fd, buffer, 4);
-	if (io_res < 4)
+	//Connection request
+	if (connection->status == CONNECTION_REQUEST)
 	{
-		msg("IO error while reading request");
-		goto fail;
-	}
-	if (buffer[3] == 2)
-	{
-		//Domain name
+		int socks_errcode = 0;
 		
-		//Read domain name
-		io_res = read(fd, buffer + 4, 1);
-		if (io_res < 1)
+		buffer = connection_peek(connection, 4);
+		if (! buffer)
+			return;
+		
+		if (buffer[0] != 5 || buffer[2] != 0)
+			socks_errcode = 1;
+		else if (buffer[1] != 1)
+			socks_errcode = 7;
+		
+		if (socks_errcode)
 		{
-			msg("IO error while reading domain name length");
-			goto fail;
-		}
-		io_res = read(fd, buffer + 5, buffer[4]);
-		if (io_res < buffer[4])
-		{
-			msg("IO error while reading domain name");
-			goto fail;
+			connection_write_socks_error(connection, socks_errcode);
+			return;
 		}
 		
-		//Read port
-		io_res = read(fd, buffer + 5 + buffer[4], 2);
-		if (io_res < 2)
+		//Read request
+		if (buffer[3] == 2)
 		{
-			msg("IO error while reading port");
-			goto fail;
+			//Domain name
+			int domain_len;
+			char domain[257];
+			int port;
+			
+			buffer = connection_peek(connection, 5);
+			if (! buffer)
+				return;
+			domain_len = buffer[4];
+			
+			buffer = connection_read
+				(connection, 4 + 1 + domain_len + 2);
+			if (! buffer)
+				return;
+			
+			//Copy out domain name
+			memcpy(domain, buffer + 5, domain_len);
+			domain[domain_len] = 0;
+			
+			//Copy out port
+			port = ntohs(*((guint16 *) (buffer + 5 + domain_len)));
+			
+			//Connect
+			connector_connect_by_name(domain, port, 
+				connection->manager, connection_connect_cb, 
+				connection);
 		}
-	}
-	else if (buffer[3] == 1)
-	{
-		//IPv4 address
-		io_res = read(fd, buffer + 4, 1);
-		if (io_res < 1)
-		{
-			msg("IO error while reading domain name length");
-			goto fail;
-		}
-	}
-	else if (buffer[3] == 3)
-	{
-		//IPv6 address
-		addr_len = sizeof(struct sockaddr_in6);
-		
-		//Read address
-		addr.inet6.sin6_family = AF_INET6;
-		io_res = read(fd, (void *) &(addr.inet6.sin6_addr), 16);
-		if (io_res < 16)
-		{
-			msg("IO error while reading IPv6 address");
-			goto fail;
-		}
-		io_res = read(fd, (void *) &(addr.inet6.sin6_port), 2);
-		if (io_res < 2)
-		{
-			msg("IO error while reading IPv6 port");
-			goto fail;
-		}
-		
-		//Get an interface
-		interface = interface_manager_get(manager, INTERFACE_INET6);
-	}
-	
-	remote_fd = interface_open(interface);
-	if (connect(remote_fd, &(addr.addr), addr_len) < 0)
-	{
-		close(remote_fd);
-		interface_close(interface);
-		remote_fd = -1;
-	}
-	}
-	
-	
-	if (buffer[0] != 5 || buffer[1] != 1 || buffer[2] != 0)
-	{
-		msg("Invalid/unsupported request (%d, %d, %d)",
-			(int) buffer[0], (int) buffer[1], (int) buffer[2]);
-		goto fail;
-	}
-	
-	//Read address type
-	if (buffer[3] == 2)
-	{
-		//Domain name
-		int domain_len;
-		int resolve_status;
-		uint16_t port;
-		char port_str[16];
-		struct addrinfo hints, *addrs, *iter;
-		int addr_type;
-		
-		//Read domain name
-		io_res = read(fd, buffer, 1);
-		if (io_res < 1)
-		{
-			msg("IO error while reading domain name length");
-			goto fail;
-		}
-		domain_len = buffer[0];
-		io_res = read(fd, buffer, domain_len);
-		if (io_res < domain_len)
-		{
-			msg("IO error while reading domain name");
-			goto fail;
-		}
-		buffer[domain_len] = 0;
-		
-		//Read port
-		io_res = read(fd, &port, 2);
-		if (io_res < 2)
-		{
-			msg("IO error while reading port");
-			goto fail;
-		}
-		
-		
-		
-		//Get interface
-		addr_type = 0;
-		for (iter = addrs; iter; iter = iter->next)
-		{
-			if (iter->ai_socktype == AF_INET)
-				addr_type |= INTERFACE_INET;
-			else if (iter->ai_socktype == AF_INET6)
-				addr_type |= INTERFACE_INET6;
-		}
-		interface = interface_manager_get(manager, addr_type);
-		
-		//Connect
-		remote_fd = -1;
-		for (iter = addrs; iter; iter = iter->next)
-		{
-			if (interface->addr.sa_family == iter->ai_socktype)
-			{
-				remote_fd = interface_open(interface);
-				
-				if (connect(remote_fd, iter->ai_addr, iter->ai_addrlen) >= 0)
-					break;
-				
-				close(remote_fd);
-				interface_close(interface);
-				remote_fd = -1;
-			}
-		}
-		
-		//Free data
-		freeaddrinfo(addrs);
-	}
-	else
-	{
-		//IP address
-		union {
-			struct sockaddr addr;
-			struct sockaddr_in inet;
-			struct sockaddr_in6 inet6;
-		} addr;
-		socklen_t addr_len;
-		
-		if (buffer[3] == 1)
+		else if (buffer[3] == 1)
 		{
 			//IPv4 address
-			addr_len = sizeof(struct sockaddr_in);
+			struct sockaddr_in addr;
 			
-			//Read address
-			addr.inet.sin_family = AF_INET;
-			io_res = read(fd, (void *) &(addr.inet.sin_addr), 4);
-			if (io_res < 4)
-			{
-				msg("IO error while reading IPv4 address");
-				goto fail;
-			}
-			io_res = read(fd, (void *) &(addr.inet.sin_port), 2);
-			if (io_res < 2)
-			{
-				msg("IO error while reading IPv4 port");
-				goto fail;
-			}
+			buffer = connection_read(connection, 4 + 4 + 2);
+			if (! buffer)
+				return;
 			
-			//Get an interface
-			interface = interface_manager_get(manager, INTERFACE_INET);
+			memcpy(&(addr.sin_addr), buffer + 4, 4);
+			memcpy(&(addr.sin_port), buffer + 8, 2);
+			
+			//Connect
+			connector_connect_by_name(&addr, 
+				connection->manager, connection_connect_cb, 
+				connection);
 		}
-		else if (buffer[3] == 3)
+		else if (buffer[3] == 4)
 		{
 			//IPv6 address
-			addr_len = sizeof(struct sockaddr_in6);
+			struct sockaddr_in addr;
 			
-			//Read address
-			addr.inet6.sin6_family = AF_INET6;
-			io_res = read(fd, (void *) &(addr.inet6.sin6_addr), 16);
-			if (io_res < 16)
-			{
-				msg("IO error while reading IPv6 address");
-				goto fail;
-			}
-			io_res = read(fd, (void *) &(addr.inet6.sin6_port), 2);
-			if (io_res < 2)
-			{
-				msg("IO error while reading IPv6 port");
-				goto fail;
-			}
+			buffer = connection_read(connection, 4 + 4 + 2);
+			if (! buffer)
+				return;
 			
-			//Get an interface
-			interface = interface_manager_get(manager, INTERFACE_INET6);
+			memcpy(&(addr.sin_addr), buffer + 4, 4);
+			memcpy(&(addr.sin_port), buffer + 8, 2);
+			
+			//Connect
+			connector_connect_by_name(&addr, 
+				connection->manager, connection_connect_cb, 
+				connection);
+		}
+		else
+		{
+			connection_write_socks_error(connection, 8);
+			return;
 		}
 		
-		remote_fd = interface_open(interface);
-		if (connect(remote_fd, &(addr.addr), addr_len) < 0)
-		{
-			close(remote_fd);
-			interface_close(interface);
-			remote_fd = -1;
-		}
+		connection->status = CONNECTION_CONNECTING;
 	}
 	
 	
-		
-fail:
-	close(fd);
-	return NULL;
 }
 
-void connection_run(int fd, Interface *interface)
+
+//GSourceFuncs::prepare
+static gboolean connection_prepare(GSource *source, gint *timeout)
 {
-	ConnectionData *data = g_slice_new(ConnectionData);
+	Connection *connection = (Connection *) source;
+	int i, opposite;
 	
-	data->fd = fd;
-	data->interface = interface;
+	//Remove connection if nothing to write
+	if (connection->status == CONNECTION_CLOSE)
+	{
+		if (connection->lanes[CONNECTION_REMOTE].end 
+				- connection->lanes[CONNECTION_REMOTE].start == 0)
+			g_source_destroy(connection);
+	}
 	
-	g_thread_unref(g_thread_new
-		(NULL, connection_main, (gpointer) data));
+	for (i = 0; i < 2; i++)
+		connection->lanes[i].in_fd.events = G_IO_HUP | G_IO_ERR;
+	
+	//Set events according to buffer status
+	for (i = 0; i < 2; i++)
+	{
+		opposite = 1 - i;
+		
+		if (connection->lanes[i].end < CONNECTION_BUFFER)
+			connection->lanes[i].in_fd.events |= G_IO_IN;
+		if (connection->lanes[i].start < connection->lanes[i].end)
+			connection->lanes[opposite].in_fd.events |= G_IO_OUT;
+	}
+	
+	//Perform no IO on CONNECTION_REMOTE if not connected
+	if (connection.state != CONNECTION_CONNECTED)
+		connection->lanes[CONNECTION_REMOTE].in_fd.events = 0;
+	
+	*timeout = -1;
+	return FALSE;
 }
 
-#endif
+//GSourceFuncs::check
+static gboolean connection_check(GSource *source)
+{
+	Connection *connection = (Connection *) source;
+	int i;
+	
+	for (i = 0; i < 2; i++)
+		if (connection->lanes[i].in_fd.revents)
+			return TRUE;
+	
+	return FALSE;
+}
+
+//GSourceFuncs::dispatch
+static gboolean connection_dispatch
+	(GSource *source, GSourceFunc callback, gpointer user_data)
+{
+	Connection *connection = (Connection *) source;
+	int i, opposite, io_res;
+	
+	//Perform no IO on CONNECTION_REMOTE if not connected
+	if (connection.state != CONNECTION_CONNECTED)
+		connection->lanes[CONNECTION_REMOTE].in_fd.revents = 0;
+	
+	//Check for errors
+	for (i = 0; i < 2; i++)
+		if (connection->lanes[i].in_fd.revents & (G_IO_HUP | G_IO_ERR))
+			return G_SOURCE_REMOVE;
+	
+	for (i = 0; i < 2; i++)
+	{
+		opposite = 1 - i;
+		
+		//Read data into buffer
+		if (connection->lanes[i].in_fd.revents & G_IO_IN)
+		{
+			io_res = read(connection->lanes[i].in_fd.fd,
+				connection->lanes[i].buffer + connection->lanes[i].end,
+				CONNECTION_BUFFER - connection->lanes[i].end);
+			
+			//Error handling
+			if (io_res < 0)
+			{
+				if (! IO_TEMP_ERROR(errno))
+					return G_SOURCE_REMOVE;
+			}
+			else if (io_res == 0)
+				return G_SOURCE_REMOVE;
+			
+			connection->lanes[i].end += io_res;
+		}
+		
+		//Write it to opposite lane
+		if (connection->lanes[opposite].in_fd.revents & G_IO_OUT)
+		{
+			io_res = write(connection->lanes[opposite].in_fd.fd,
+				connection->lanes[i].buffer + connection->lanes[i].start,
+				connection->lanes[i].end - connection->lanes[i].start);
+			
+			//Error handling
+			if (io_res < 0)
+			{
+				if (! IO_TEMP_ERROR(errno))
+					return G_SOURCE_REMOVE;
+			}
+			else if (io_res == 0)
+				return G_SOURCE_REMOVE;
+			
+			connection->lanes[i].start += io_res;
+			
+			//If start of buffer crosses middle,
+			//shift the buffer contents to beginning
+			if (connection->lanes[i].start >= (CONNECTION_BUFFER / 2))
+			{
+				int j, new_end;
+				
+				new_end = connection->lanes[i].end - connection->lanes[i].start;
+				
+				for (j = 0; j < new_end; j++)
+					connection->lanes[i].buffer[j] 
+						= connection->lanes[i].buffer
+							[j + connection->lanes[i].start];
+				
+				connection->lanes[i].start = 0;
+				connection->lanes[i].end = new_end;
+			}
+		}
+	}
+	
+	//If status is at teardown,
+	//remove the source if no data to write
+	if (connection->status == CONNECTION_CLOSE
+		&& (connection->lanes[CONNECTION_REMOTE].end 
+			- connection->lanes[CONNECTION_REMOTE].start == 0))
+	{
+		return G_SOURCE_REMOVE;
+	}
+	
+	connection_authenticator(connection);
+	
+	return G_SOURCE_CONTINUE;
+}
+
+//GSourceFuncs::finalize
+static void connection_finalize(GSource *source)
+{
+	Connection *connection = (Connection *) source;
+	int i;
+	
+	for (i = 0; i < 2; i++)
+		close(connection->lanes[i].in_fd.fd);
+	
+	if (connection->iface)
+		interface_close(connection->iface);
+}
+
+static GSourceFuncs connection_funcs =
+{
+	connection_prepare,
+	connection_check,
+	connection_dispatch,
+	connection_finalize
+};
+
+//Add a connection to default context
+guint connection_create(int fd, InterfaceManager *manager)
+{
+	Connection *connection;
+	guint tag;
+	int i;
+	
+	//Create GSource
+	connection = (Connection *) g_source_new(&connection_funcs, sizeof(Connection));
+	
+	//Initialize lanes
+	for (i = 0; i < 2; i++)
+	{
+		connection->lanes[i].in_fd.fd = fd;
+		g_source_add_poll
+			((GSource *) connection, &(connection->lanes[i].in_fd));
+		connection->lanes[i].start + connection->lanes[i].end = 0;
+	}
+	
+	//Add interface
+	connection->state = CONNECTION_AUTH;
+	connection->manager = manager;
+	connection->iface = NULL;
+	
+	//Add to default context
+	tag = g_source_attach((GSource *) connection, NULL);
+	g_source_unref((GSource *) connection);
+	
+	return tag;
+}
+
