@@ -20,6 +20,8 @@
 
 #include "utils.h"
 
+#include <fcntl.h>
+
 //Error reporting
 
 void abort_with_error(const char *fmt, ...)
@@ -51,3 +53,36 @@ void abort_with_liberror(const char *fmt, ...)
 	
 	abort();
 }	
+
+//Sets whether IO operations on fd should block
+//val<0 means do nothing
+int fd_set_blocking(int fd, int val)
+{
+	int stat_flags, res;
+	
+	//Get flags
+	stat_flags = fcntl(fd, F_GETFL, 0);
+	if (stat_flags < 0)
+		abort_with_liberror
+			("Failed to get file descriptor flags"
+			" for file descriptor %d:", fd);
+	
+	//Get current status
+	res = !(stat_flags & O_NONBLOCK);
+	
+	//Set non-blocking
+	if (val > 0)
+		stat_flags &= (~O_NONBLOCK);
+	else if (val == 0)
+		stat_flags |= O_NONBLOCK;
+	else
+		return res;
+	
+	//Set back the flags
+	if (fcntl(fd, F_SETFL, stat_flags) < 0)
+		abort_with_liberror
+			("Failed to set file descriptor flags"
+			" for file descriptor %d:", fd);
+	
+	return res;
+}

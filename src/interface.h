@@ -55,13 +55,14 @@ typedef struct
 	struct sockaddr_in6 addr;
 } InterfaceInet6;
 
+//Creates a new interface from string description
+Interface *interface_new_from_string(const char *desc)
+
 //Opens a socket bound to the interface.
 int interface_open(Interface *interface);
 
 //Closes socket bound to the interface.
 void interface_close(Interface *interface);
-
-
 
 //Interface manager
 typedef struct
@@ -76,9 +77,9 @@ InterfaceManager *interface_manager_new();
 Interface *interface_manager_get
 	(InterfaceManager *manager, int addr_type);
 
-//Adds a dispatch address from string description
-void interface_manager_add_from_string
-	(InterfaceManager *manager, const char *desc);
+//Adds a dispatch address
+void interface_manager_add
+	(InterfaceManager *manager, Interface *interface);
 
 //Frees interface manager
 void interface_manager_free(InterfaceManager *manager);

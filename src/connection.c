@@ -180,6 +180,7 @@ void connection_connect_cb(ConnectorData *info)
 	connection->lanes[1].in_fd.fd = info->remote_fd;
 	connection->iface = info->iface;
 	connection->status = CONNECTION_CONNECTED;
+	fd_set_blocking(info->remote_fd, 0);
 	
 	//Assertions
 	if (! connection->iface)
@@ -519,6 +520,9 @@ guint connection_create(int fd, InterfaceManager *manager)
 	connection->state = CONNECTION_AUTH;
 	connection->manager = manager;
 	connection->iface = NULL;
+	
+	//Make fd nonbocking
+	fd_set_blocking(fd, 0);
 	
 	//Add to default context
 	tag = g_source_attach((GSource *) connection, NULL);

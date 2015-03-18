@@ -36,6 +36,82 @@ static int find_namespace(struct sockaddr *addr)
 	return -1;
 }
 
+//Creates a new interface from string description
+//Use g_free() to destroy.
+Interface *interface_new_from_string(const char *desc)
+{
+	Interface *interface;
+	char *desc_cp;
+	int addr_type;
+	
+	desc_cp = g_strdup(desc);
+	
+	//First character will tell address type
+	if (desc_cp[0] != '[')
+	{
+		//IPv4
+		InterfaceInet4 *inet4_iface;
+		
+		//Allocate
+		inet4_iface = (InterfaceInet4 *) 
+			g_malloc(sizeof(InterfaceInet4));
+		
+		//Initialize
+		inet4_iface->len = sizeof(struct sockaddr_in);
+		inet4_iface->use_count = 0;
+		inet4_iface->addr.sin_family = AF_INET;
+		inet4_iface->addr.sin_port = 0;
+		
+		//Read address
+		if (inet_pton(AF_INET, desc_cp, 
+		              (void *) &(inet4_iface->addr.sin_addr)) != 1)
+		{
+			g_error("Invalid address %s", desc);
+		}
+		
+		//Pass information out
+		interface = (Interface *) inet4_iface;
+	}
+	else
+	{
+		//IPv6
+		InterfaceInet6 *inet6_iface;
+		int addr_end;
+		
+		//Remove ending ']'
+		for (addr_end = 0; desc_cp[addr_end]; addr_end++)
+			if (desc_cp[addr_end] == ']')
+				break;
+		if (! desc_cp[addr_end])
+			g_error("Invalid address %s", desc);
+		desc_cp[addr_end] = 0;
+		
+		//Allocate
+		inet6_iface = (InterfaceInet6 *) 
+			g_malloc(sizeof(InterfaceInet6));
+		
+		//Initialize
+		inet6_iface->len = sizeof(struct sockaddr_in6);
+		inet6_iface->use_count = 0;
+		inet6_iface->addr.sin6_family = AF_INET6;
+		inet6_iface->addr.sin6_port = 0;
+		
+		//Read address
+		if (inet_pton(AF_INET6, desc_cp + 1, 
+		              (void *) &(inet6_iface->addr.sin6_addr)) != 1)
+		{
+			g_error("Invalid address %s", desc);
+		}
+		
+		//Pass information out
+		interface = (Interface *) inet6_iface;
+	}
+	
+	g_free(desc_cp);
+	
+	return interface;
+}
+
 //Opens a socket bound to the interface.
 int interface_open(Interface *interface)
 {
@@ -99,80 +175,16 @@ Interface *interface_manager_get
 	return selected;
 }
 
-//Adds a dispatch address from string description
-void interface_manager_add_from_string
-	(InterfaceManager *manager, const char *desc)
+//Adds a dispatch address
+void interface_manager_add
+	(InterfaceManager *manager, Interface *interface)
 {
-	Interface *interface;
-	char *desc_cp;
 	int addr_type;
 	
-	desc_cp = g_strdup(desc);
-	
-	//First character will tell address type
-	if (desc_cp[0] != '[')
-	{
-		//IPv4
-		InterfaceInet4 *inet4_iface;
-		
-		//Allocate
-		inet4_iface = (InterfaceInet4 *) 
-			g_malloc(sizeof(InterfaceInet4));
-		
-		//Initialize
-		inet4_iface->len = sizeof(struct sockaddr_in);
-		inet4_iface->use_count = 0;
-		inet4_iface->addr.sin_family = AF_INET;
-		inet4_iface->addr.sin_port = 0;
-		
-		//Read address
-		if (inet_pton(AF_INET, desc_cp, 
-		              (void *) &(inet4_iface->addr.sin_addr)) != 1)
-		{
-			g_error("Invalid address %s", desc);
-		}
-		
-		//Pass information out
+	if (interface->addr.sa_family == AF_INET)
 		addr_type = INTERFACE_OFF_INET;
-		interface = (Interface *) inet4_iface;
-	}
 	else
-	{
-		//IPv6
-		InterfaceInet6 *inet6_iface;
-		int addr_end;
-		
-		//Remove ending ']'
-		for (addr_end = 0; desc_cp[addr_end]; addr_end++)
-			if (desc_cp[addr_end] == ']')
-				break;
-		if (! desc_cp[addr_end])
-			g_error("Invalid address %s", desc);
-		desc_cp[addr_end] = 0;
-		
-		//Allocate
-		inet6_iface = (InterfaceInet6 *) 
-			g_malloc(sizeof(InterfaceInet6));
-		
-		//Initialize
-		inet6_iface->len = sizeof(struct sockaddr_in6);
-		inet6_iface->use_count = 0;
-		inet6_iface->addr.sin6_family = AF_INET6;
-		inet6_iface->addr.sin6_port = 0;
-		
-		//Read address
-		if (inet_pton(AF_INET6, desc_cp + 1, 
-		              (void *) &(inet6_iface->addr.sin6_addr)) != 1)
-		{
-			g_error("Invalid address %s", desc);
-		}
-		
-		//Pass information out
 		addr_type = INTERFACE_OFF_INET6;
-		interface = (Interface *) inet6_iface;
-	}
-	
-	g_free(desc_cp);
 	
 	//Add
 	interface->next = manager->ifaces[addr_type];

@@ -29,7 +29,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <sys/uio.h>
 #include <string.h>
 #include <errno.h>
 
@@ -50,11 +49,6 @@ void abort_with_error(const char *fmt, ...);
 
 void abort_with_liberror(const char *fmt, ...);
 
-typedef struct _Ring Ring;
-struct Ring
-{
-	Ring *next;
-	Ring *prev;
-};
+int fd_set_blocking(int fd, int val);
 
 #endif 
