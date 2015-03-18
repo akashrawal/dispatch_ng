@@ -22,7 +22,9 @@
 #define CONNECTION_H
 
 #include "interface.h"
-#include "resolver.h"
-#include "channel.h"
+#include "connector.h"
+
+//Add a connection to default context
+guint connection_create(int fd, InterfaceManager *manager)
 
 #endif //CONNECTION_H
