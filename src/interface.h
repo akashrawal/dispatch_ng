@@ -35,6 +35,7 @@ struct _Interface
 {
 	Interface *next;
 	int use_count;
+	int metric;
 	socklen_t len;
 	struct sockaddr addr;
 };
@@ -43,6 +44,7 @@ typedef struct
 {
 	Interface *next;
 	int use_count;
+	int metric;
 	socklen_t len;
 	struct sockaddr_in addr;
 } InterfaceInet4;
@@ -51,6 +53,7 @@ typedef struct
 {
 	Interface *next;
 	int use_count;
+	int metric;
 	socklen_t len;
 	struct sockaddr_in6 addr;
 } InterfaceInet6;

@@ -43,6 +43,8 @@ Interface *interface_new_from_string(const char *desc)
 	Interface *interface;
 	char *desc_cp;
 	int addr_type;
+	int metric = 0;
+	int addr_end = 0;
 	
 	desc_cp = g_strdup(desc);
 	
@@ -51,6 +53,12 @@ Interface *interface_new_from_string(const char *desc)
 	{
 		//IPv4
 		InterfaceInet4 *inet4_iface;
+		
+		//Remove ':'
+		for (addr_end = 0; desc_cp[addr_end]; addr_end++)
+			if (desc_cp[addr_end] == ':')
+				break;
+		desc_cp[addr_end] = 0;
 		
 		//Allocate
 		inet4_iface = (InterfaceInet4 *) 
@@ -76,7 +84,6 @@ Interface *interface_new_from_string(const char *desc)
 	{
 		//IPv6
 		InterfaceInet6 *inet6_iface;
-		int addr_end;
 		
 		//Remove ending ']'
 		for (addr_end = 0; desc_cp[addr_end]; addr_end++)
@@ -107,7 +114,21 @@ Interface *interface_new_from_string(const char *desc)
 		interface = (Interface *) inet6_iface;
 	}
 	
+	//Put back ':' or ']'
+	desc_cp[addr_end] = desc[addr_end];
+	
+	//Find metric
+	for (; desc_cp[addr_end]; i--)
+		if (desc_cp[addr_end] == ':')
+		{
+			addr_end++;
+			metric = atoi(desc_cp + addr_end);
+			break;
+		}
+	
 	g_free(desc_cp);
+	
+	interface->metric = metric;
 	
 	return interface;
 }
@@ -126,7 +147,50 @@ int interface_open(Interface *interface)
 	
 	g_atomic_int_inc(&(interface->use_count));
 	
-	return;
+	return fd;
+}
+
+//Opens a server socket
+int interface_open_server(Interface *interface)
+{
+	union
+	{
+		struct sockaddr addr;
+		struct sockaddr_in addr4;
+		struct sockaddr_in6 addr6;
+	} a;
+	int fd;
+	int port;
+	
+	if (interface->metric)
+		port = interface->metric;
+	else 
+		port = 1080;
+	
+	if (interface->addr.sa_family == AF_INET)
+	{
+		InterfaceInet4 *iface4 = (InterfaceInet4 *) interface;
+		a.addr4 = iface4.addr;
+		a.addr4.sin_port = htons(port);
+	}
+	else
+	{
+		InterfaceInet6 *iface6 = (InterfaceInet6 *) interface;
+		a.addr6 = iface6.addr;
+		a.addr6.sin6_port = htons(port);
+	}
+	
+	fd = socket(find_namespace(&(interface->addr)), SOCK_STREAM, 0);
+	if (fd < 0)
+		abort_with_liberror("socket()");
+	
+	if (bind(fd, &(a.addr), interface->len) < 0)
+		abort_with_liberror("bind()");
+	
+	if (listen(fd, 5) < 0)
+		abort_with_liberror("listen()");
+	
+	return fd;
 }
 
 //Closes socket bound to the interface.
