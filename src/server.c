@@ -1,4 +1,4 @@
-/* server.h
+/* server.c
  * Server socket
  * 
  * Copyright 2015 Akash Rawal

@@ -59,10 +59,14 @@ typedef struct
 } InterfaceInet6;
 
 //Creates a new interface from string description
-Interface *interface_new_from_string(const char *desc)
+//Use g_free() to destroy.
+Interface *interface_new_from_string(const char *desc, int metric);
 
 //Opens a socket bound to the interface.
 int interface_open(Interface *interface);
+
+//Opens a server socket
+int interface_open_server(Interface *interface);
 
 //Closes socket bound to the interface.
 void interface_close(Interface *interface);

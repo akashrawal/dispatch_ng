@@ -38,12 +38,11 @@ static int find_namespace(struct sockaddr *addr)
 
 //Creates a new interface from string description
 //Use g_free() to destroy.
-Interface *interface_new_from_string(const char *desc)
+Interface *interface_new_from_string(const char *desc, int metric)
 {
 	Interface *interface;
 	char *desc_cp;
 	int addr_type;
-	int metric = 0;
 	int addr_end = 0;
 	
 	desc_cp = g_strdup(desc);
@@ -160,24 +159,18 @@ int interface_open_server(Interface *interface)
 		struct sockaddr_in6 addr6;
 	} a;
 	int fd;
-	int port;
-	
-	if (interface->metric)
-		port = interface->metric;
-	else 
-		port = 1080;
 	
 	if (interface->addr.sa_family == AF_INET)
 	{
 		InterfaceInet4 *iface4 = (InterfaceInet4 *) interface;
 		a.addr4 = iface4.addr;
-		a.addr4.sin_port = htons(port);
+		a.addr4.sin_port = htons(interface->metric);
 	}
 	else
 	{
 		InterfaceInet6 *iface6 = (InterfaceInet6 *) interface;
 		a.addr6 = iface6.addr;
-		a.addr6.sin6_port = htons(port);
+		a.addr6.sin6_port = htons(interface->metric);
 	}
 	
 	fd = socket(find_namespace(&(interface->addr)), SOCK_STREAM, 0);
@@ -197,6 +190,24 @@ int interface_open_server(Interface *interface)
 void interface_close(Interface *interface)
 {
 	g_atomic_int_add(&(interface->use_count), -1);
+}
+
+//Writes textual description of an interface
+void interface_write(Interface *interface)
+{
+	char buffer[64];
+	if (interface->addr.sa_family == AF_INET)
+	{
+		InterfaceInet4 *iface4 = (InterfaceInet4 *) interface;
+		inet_pton(AF_INET, &(iface4->addr.sin_addr), buffer, 64);
+	}
+	else
+	{
+		InterfaceInet6 *iface6 = (InterfaceInet6 *) interface;
+		inet_pton(AF_INET6, &(iface6->addr.sin6_addr), buffer, 64);
+	}
+	
+	printf("%s:%d", buffer, interface->metric);
 }
 
 //Creates a new blank interface manager
