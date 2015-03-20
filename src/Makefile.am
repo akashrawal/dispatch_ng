@@ -7,6 +7,7 @@ dispatch_ng_SOURCES = utils.c      utils.h            \
                       connection.c connection.h       \
                       server.c     server.h           \
                       main.c
-dispatch_ng_CFLAGS = -Wall
+dispatch_ng_CFLAGS = -Wall $(DISPATCH_NG_CFLAGS)
+dispatch_ng_LDADD = $(DISPATCH_NG_LIBS)
                       
 

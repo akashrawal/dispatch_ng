@@ -42,7 +42,6 @@ Interface *interface_new_from_string(const char *desc, int metric)
 {
 	Interface *interface;
 	char *desc_cp;
-	int addr_type;
 	int addr_end = 0;
 	
 	desc_cp = g_strdup(desc);
@@ -61,7 +60,7 @@ Interface *interface_new_from_string(const char *desc, int metric)
 		
 		//Allocate
 		inet4_iface = (InterfaceInet4 *) 
-			g_malloc(sizeof(InterfaceInet4));
+			g_malloc0(sizeof(InterfaceInet4));
 		
 		//Initialize
 		inet4_iface->len = sizeof(struct sockaddr_in);
@@ -94,7 +93,7 @@ Interface *interface_new_from_string(const char *desc, int metric)
 		
 		//Allocate
 		inet6_iface = (InterfaceInet6 *) 
-			g_malloc(sizeof(InterfaceInet6));
+			g_malloc0(sizeof(InterfaceInet6));
 		
 		//Initialize
 		inet6_iface->len = sizeof(struct sockaddr_in6);
@@ -117,7 +116,7 @@ Interface *interface_new_from_string(const char *desc, int metric)
 	desc_cp[addr_end] = desc[addr_end];
 	
 	//Find metric
-	for (; desc_cp[addr_end]; i--)
+	for (; desc_cp[addr_end]; addr_end++)
 		if (desc_cp[addr_end] == ':')
 		{
 			addr_end++;
@@ -163,13 +162,13 @@ int interface_open_server(Interface *interface)
 	if (interface->addr.sa_family == AF_INET)
 	{
 		InterfaceInet4 *iface4 = (InterfaceInet4 *) interface;
-		a.addr4 = iface4.addr;
+		a.addr4 = iface4->addr;
 		a.addr4.sin_port = htons(interface->metric);
 	}
 	else
 	{
 		InterfaceInet6 *iface6 = (InterfaceInet6 *) interface;
-		a.addr6 = iface6.addr;
+		a.addr6 = iface6->addr;
 		a.addr6.sin6_port = htons(interface->metric);
 	}
 	
@@ -199,15 +198,15 @@ void interface_write(Interface *interface)
 	if (interface->addr.sa_family == AF_INET)
 	{
 		InterfaceInet4 *iface4 = (InterfaceInet4 *) interface;
-		inet_pton(AF_INET, &(iface4->addr.sin_addr), buffer, 64);
+		inet_ntop(AF_INET, &(iface4->addr.sin_addr), buffer, 64);
+		printf("%s:%d", buffer, interface->metric);
 	}
 	else
 	{
 		InterfaceInet6 *iface6 = (InterfaceInet6 *) interface;
-		inet_pton(AF_INET6, &(iface6->addr.sin6_addr), buffer, 64);
+		inet_ntop(AF_INET6, &(iface6->addr.sin6_addr), buffer, 64);
+		printf("[%s]:%d", buffer, interface->metric);
 	}
-	
-	printf("%s:%d", buffer, interface->metric);
 }
 
 //Creates a new blank interface manager

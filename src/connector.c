@@ -22,35 +22,36 @@
 
 typedef struct
 {
-	ConnectorData parent;
+	Connector parent;
 	int port;
 	char name[1];
 } ConnectorByName;
 
 typedef struct
 {
-	ConnectorData parent;
+	Connector parent;
 	struct sockaddr addr;
 } ConnectorByAddr;
 
 typedef struct
 {
-	ConnectorData parent;
+	Connector parent;
 	struct sockaddr_in addr;
 } ConnectorByAddr4;
 
 typedef struct
 {
-	ConnectorData parent;
+	Connector parent;
 	struct sockaddr_in6 addr;
 } ConnectorByAddr6;
 
 gboolean connector_idle(gpointer data)
 {
-	ConnectorData *info = (ConnectorData *) data;
-	
+	Connector *info = (Connector *) data;
+		
 	//Call callback and free structure
-	(* info->cb)(info);
+	if (! info->cancelled)
+		(* info->cb)(info);
 	
 	//Free data
 	g_free(data);
@@ -61,18 +62,18 @@ gboolean connector_idle(gpointer data)
 
 gpointer connector_thread(gpointer data)
 {
-	ConnectorData *info = (ConnectorData *) data;
+	Connector *info = (Connector *) data;
 	
 	if (info->source == CONNECTOR_NAME)
 	{
 		ConnectorByName *by_name = (ConnectorByName *) info;
 		char port_str[16];
-		struct addrinfo hints, *addrs;
+		struct addrinfo hints, *addrs, *iter;
 		int resolve_status, addr_type, saved_errno, remote_fd;
 		Interface *iface;
 		
 		//Resolve domain name
-		sprintf(port_str, "%d", info->port);
+		sprintf(port_str, "%d", by_name->port);
 		hints.ai_flags = 0;
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
@@ -94,7 +95,7 @@ gpointer connector_thread(gpointer data)
 		
 		//Get interface
 		addr_type = 0;
-		for (iter = addrs; iter; iter = iter->next)
+		for (iter = addrs; iter; iter = iter->ai_next)
 		{
 			if (iter->ai_socktype == AF_INET)
 				addr_type |= INTERFACE_INET;
@@ -103,9 +104,16 @@ gpointer connector_thread(gpointer data)
 		}
 		iface = interface_manager_get(info->manager, addr_type);
 		
+		//See if we got an interface
+		if (! iface)
+		{
+			info->socks_status = 3;
+			goto end;
+		}
+		
 		//Connect
 		remote_fd = -1;
-		for (iter = addrs; iter; iter = iter->next)
+		for (iter = addrs; iter; iter = iter->ai_next)
 		{
 			if (iface->addr.sa_family == iter->ai_socktype)
 			{
@@ -114,8 +122,6 @@ gpointer connector_thread(gpointer data)
 				if (connect(remote_fd, iter->ai_addr, iter->ai_addrlen) >= 0)
 					break;
 				saved_errno = errno;
-				
-				connection->connect_errno = errno;
 				
 				close(remote_fd);
 				interface_close(iface);
@@ -144,7 +150,7 @@ gpointer connector_thread(gpointer data)
 	}
 	else
 	{
-		ConnectorByAddr *by_addr = (ConnectorByName *) info;
+		ConnectorByAddr *by_addr = (ConnectorByAddr *) info;
 		int addr_len;
 		int remote_fd;
 		Interface *iface;
@@ -161,6 +167,13 @@ gpointer connector_thread(gpointer data)
 			addr_len = sizeof(struct sockaddr_in6);
 			iface = interface_manager_get
 				(info->manager, INTERFACE_INET6);
+		}
+		
+		//See if we got an interface
+		if (! iface)
+		{
+			info->socks_status = 3;
+			goto end;
 		}
 		
 		//Connect
@@ -193,7 +206,7 @@ end:
 	return NULL;
 }
 
-void connector_connect_by_name
+Connector *connector_connect_by_name
 	(const char *name, int port, InterfaceManager *manager,
 	 ConnectorCB cb, gpointer data)
 {
@@ -206,15 +219,19 @@ void connector_connect_by_name
 	info->parent.remote_fd = 0;
 	info->parent.iface = NULL;
 	info->parent.manager = manager;
+	info->parent.source = CONNECTOR_NAME;
 	info->parent.cb = cb;
-	info->parent->data = data;
+	info->parent.data = data;
+	info->parent.cancelled = 0;
 	info->port = port;
 	strcpy(info->name, name);
 	
 	g_thread_unref(g_thread_new(NULL, connector_thread, info));
+	
+	return (Connector *) info;
 }
 
-void connector_connect_by_addr
+Connector *connector_connect_by_addr
 	(struct sockaddr *addr, InterfaceManager *manager,
 	 ConnectorCB cb, gpointer data)
 {
@@ -236,9 +253,18 @@ void connector_connect_by_addr
 	info->parent.remote_fd = -1;
 	info->parent.iface = NULL;
 	info->parent.manager = manager;
+	info->parent.source = CONNECTOR_ADDR;
 	info->parent.cb = cb;
-	info->parent->data = data;
+	info->parent.data = data;
+	info->parent.cancelled = 0;
 	memcpy(&(info->addr), addr, addr_len);
 	
 	g_thread_unref(g_thread_new(NULL, connector_thread, info));
+	
+	return (Connector *) info;
+}
+
+void connector_cancel(Connector *connector)
+{
+	connector->cancelled = 1;
 }

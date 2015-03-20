@@ -71,6 +71,9 @@ int interface_open_server(Interface *interface);
 //Closes socket bound to the interface.
 void interface_close(Interface *interface);
 
+//Writes textual description of an interface
+void interface_write(Interface *interface);
+
 //Interface manager
 typedef struct
 {

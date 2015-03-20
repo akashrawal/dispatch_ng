@@ -21,10 +21,9 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
-#include "interface.h"
 #include "connector.h"
 
 //Add a connection to default context
-guint connection_create(int fd, InterfaceManager *manager)
+guint connection_create(int fd, InterfaceManager *manager);
 
 #endif //CONNECTION_H

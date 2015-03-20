@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 				"addr1:metric1 addr2:metric2 ...\n");
 			exit(1);
 		}
-		len = strlen("--bind=")
+		len = strlen("--bind=");
 		if (strncmp(argv[i], "--bind=", len) == 0)
 		{
 			iter = interface_new_from_string(argv[i] + len, 1080);
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			iter = interface_new_from_string(argv[i] + len, 1);
+			iter = interface_new_from_string(argv[i], 1);
 			iter->next = dispatch;
 			dispatch = iter;
 		}
@@ -73,21 +73,22 @@ int main(int argc, char *argv[])
 	printf("SOCKS server listening at");
 	for (iter = listen; iter; iter = iter->next)
 	{
-		interface_write(iter);
 		printf(" ");
+		interface_write(iter);
 	}
-	
-	printf("Dispatching to addresses");
+	printf("\nDispatching to addresses");
 	for (iter = dispatch; iter; iter = iter->next)
 	{
-		interface_write(iter);
 		printf(" ");
+		interface_write(iter);
 	}
+	printf("\n");
 	
 	//Start dispatch
 	manager = interface_manager_new();
-	for (iter = dispatch; iter; iter = iter->next)
+	for (iter = dispatch; iter; iter = next)
 	{
+		next = iter->next;
 		interface_manager_add(manager, iter);
 	}
 	for (iter = listen; iter; iter = iter->next)

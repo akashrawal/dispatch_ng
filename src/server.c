@@ -22,6 +22,7 @@
 
 typedef struct
 {
+	GSource source;
 	GPollFD fd;
 	InterfaceManager *manager;
 } Server;
@@ -79,7 +80,6 @@ guint server_create(Interface *iface, InterfaceManager *manager)
 {
 	Server *server;
 	guint tag;
-	int i;
 	
 	//Create GSource
 	server = (Server *) g_source_new(&server_funcs, sizeof(Server));
@@ -91,8 +91,9 @@ guint server_create(Interface *iface, InterfaceManager *manager)
 	fd_set_blocking(server->fd.fd, 0);
 	
 	//Init
-	server->fd.events = 0;
+	server->fd.events = G_IO_IN;
 	server->manager = manager;
+	g_source_add_poll((GSource *) server, &(server->fd));
 	
 	//Add to default context
 	tag = g_source_attach((GSource *) server, NULL);

@@ -21,7 +21,7 @@
 #ifndef CONNECTOR_H
 #define CONNECTOR_H
 
-#include "utils.h"
+#include "interface.h"
 
 typedef enum
 {
@@ -29,26 +29,33 @@ typedef enum
 	CONNECTOR_ADDR
 } ConnectorSource;
 
-typedef struct
+typedef struct _Connector Connector;
+
+typedef void (*ConnectorCB)(Connector *info);
+
+struct _Connector
 {
 	int socks_status;
 	int remote_fd;
 	Interface *iface;
 	InterfaceManager *manager;
+	
+	//Private
 	ConnectorSource source;
 	ConnectorCB cb;
 	gpointer data;
-} ConnectorData;
+	int cancelled;
+};
 
 
-typedef void (*ConnectorCB)(ConnectorData *info);
-
-void connector_connect_by_name
+Connector *connector_connect_by_name
 	(const char *name, int port, InterfaceManager *manager, 
-	ResolverCB cb, gpointer data);
+	ConnectorCB cb, gpointer data);
 
-void connector_connect_by_addr
+Connector *connector_connect_by_addr
 	(struct sockaddr *addr, InterfaceManager *manager,
-	ResolverCB cb, gpointer data);
+	ConnectorCB cb, gpointer data);
+	
+void connector_cancel(Connector *connector);
 
-#undef //CONNECTOR_H
+#endif //CONNECTOR_H
