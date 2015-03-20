@@ -157,8 +157,9 @@ int interface_open_server(Interface *interface)
 		struct sockaddr_in addr4;
 		struct sockaddr_in6 addr6;
 	} a;
-	int fd;
+	int fd, yes = 1;
 	
+	//Get address to be bound
 	if (interface->addr.sa_family == AF_INET)
 	{
 		InterfaceInet4 *iface4 = (InterfaceInet4 *) interface;
@@ -172,15 +173,21 @@ int interface_open_server(Interface *interface)
 		a.addr6.sin6_port = htons(interface->metric);
 	}
 	
+	//Create socket
 	fd = socket(find_namespace(&(interface->addr)), SOCK_STREAM, 0);
 	if (fd < 0)
 		abort_with_liberror("socket()");
+	
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0)
+		abort_with_liberror("setsockopt(SO_REUSEADDR)");
 	
 	if (bind(fd, &(a.addr), interface->len) < 0)
 		abort_with_liberror("bind()");
 	
 	if (listen(fd, 5) < 0)
 		abort_with_liberror("listen()");
+		
+	
 	
 	return fd;
 }
