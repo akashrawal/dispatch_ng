@@ -72,7 +72,7 @@ Interface *interface_new_from_string(const char *desc, int metric)
 		if (inet_pton(AF_INET, desc_cp, 
 		              (void *) &(inet4_iface->addr.sin_addr)) != 1)
 		{
-			g_error("Invalid address %s", desc);
+			abort_with_error("Invalid address %s", desc);
 		}
 		
 		//Pass information out
@@ -88,7 +88,7 @@ Interface *interface_new_from_string(const char *desc, int metric)
 			if (desc_cp[addr_end] == ']')
 				break;
 		if (! desc_cp[addr_end])
-			g_error("Invalid address %s", desc);
+			abort_with_error("Invalid address %s", desc);
 		desc_cp[addr_end] = 0;
 		
 		//Allocate
@@ -105,7 +105,7 @@ Interface *interface_new_from_string(const char *desc, int metric)
 		if (inet_pton(AF_INET6, desc_cp + 1, 
 		              (void *) &(inet6_iface->addr.sin6_addr)) != 1)
 		{
-			g_error("Invalid address %s", desc);
+			abort_with_error("Invalid address %s", desc);
 		}
 		
 		//Pass information out
