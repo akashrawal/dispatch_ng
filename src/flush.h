@@ -1,5 +1,5 @@
-/* connection.h
- * Handles client connections.
+/* flush.h
+ * Asynchronous flush operator
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -19,5 +19,9 @@
  */
 
 
-//Add a connection to default context
-guint connection_create(int fd, InterfaceManager *manager);
+
+#define BUFFER_SIZE (2048)
+#define FLUSH_TIMEOUT 20
+
+void flush_add(int fd, void *buf, int len);
+

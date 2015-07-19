@@ -18,7 +18,7 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "interface.h"
+#include "incl.h"
 
 
 //Map AF_* values to PF_* values

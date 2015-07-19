@@ -1,5 +1,5 @@
-/* connection.h
- * Handles client connections.
+/* address.h
+ * Internet address abstraction
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -18,6 +18,38 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+typedef struct
+{
+	int len;
+	union
+	{
+		struct sockaddr x;
+		struct sockaddr_in v4;
+		struct sockaddr_in6 v6;
+	} x;
+} Sockaddr;
 
-//Add a connection to default context
-guint connection_create(int fd, InterfaceManager *manager);
+#define ADDRESS_INET  (1 << 0)
+#define ADDRESS_OFF_INET  (0)
+#define ADDRESS_INET6 (1 << 1)
+#define ADDRESS_OFF_INET6  (1)
+#define ADDRESS_N_TYPES (2)
+
+typedef struct 
+{
+	int type;
+	uint32_t ip[4];
+} Address;
+
+#define PORT ':'
+
+#define METRIC '@'
+
+void address_read(Address *addr, const char *str, int *suffix, char what);
+
+void address_create_sockaddr(Address *addr, int port, Sockaddr *saddr);
+
+int address_open_iface(Address *addr);
+
+int address_open_svr(Address *addr, int port);
+

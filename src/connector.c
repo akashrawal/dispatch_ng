@@ -1,4 +1,4 @@
-/* connector.h
+/* connector.c
  * Asynchronous connection manager
  * 
  * Copyright 2015 Akash Rawal
@@ -18,7 +18,7 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "connector.h"
+#include "incl.h"
 
 typedef struct
 {

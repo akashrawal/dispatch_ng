@@ -18,10 +18,6 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef INTERFACE_H
-#define INTERFACE_H
-
-#include "utils.h"
 
 #define INTERFACE_INET  (1 << 0)
 #define INTERFACE_OFF_INET  (0)
@@ -93,5 +89,3 @@ void interface_manager_add
 
 //Frees interface manager
 void interface_manager_free(InterfaceManager *manager);
-
-#endif //INTERFACE_H

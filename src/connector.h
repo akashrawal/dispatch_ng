@@ -18,11 +18,6 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef CONNECTOR_H
-#define CONNECTOR_H
-
-#include "interface.h"
-
 typedef enum
 {
 	CONNECTOR_NAME,
@@ -58,4 +53,3 @@ Connector *connector_connect_by_addr
 	
 void connector_cancel(Connector *connector);
 
-#endif //CONNECTOR_H

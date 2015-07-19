@@ -18,7 +18,7 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "utils.h"
+#include "incl.h"
 
 #include <fcntl.h>
 
@@ -52,7 +52,29 @@ void abort_with_liberror(const char *fmt, ...)
 	fprintf(stderr, ": %s\n", strerror(errno));
 	
 	abort();
-}	
+}
+
+void *fs_malloc(size_t size)
+{
+	void *mem = malloc(size);
+	
+	if (! mem)
+		abort_with_error("Failed to allocate %ld bytes, aborting...",
+			(long) size);
+	
+	return mem;
+}
+
+void *fs_realloc(void *mem, size_t size)
+{
+	mem = realloc(mem, size);
+	
+	if (! mem)
+		abort_with_error("Failed to allocate %ld bytes, aborting...",
+			(long) size);
+	
+	return mem;
+}
 
 //Sets whether IO operations on fd should block
 //val<0 means do nothing
@@ -86,3 +108,7 @@ int fd_set_blocking(int fd, int val)
 	
 	return res;
 }
+
+//Event loop
+
+struct event_base *evbase;

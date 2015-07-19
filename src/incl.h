@@ -1,5 +1,5 @@
-/* connection.h
- * Handles client connections.
+/* incl.h
+ * Common includes
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -19,5 +19,23 @@
  */
 
 
-//Add a connection to default context
-guint connection_create(int fd, InterfaceManager *manager);
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdarg.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <string.h>
+#include <errno.h>
+
+#include <event2/event.h>
+
+#include "utils.h"
+#include "address.h"
+#include "balancer.h"
+#include "connector.h"
+#include "flush.h"
+#include "session.h"
+#include "server.h"

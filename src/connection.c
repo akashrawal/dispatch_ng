@@ -18,7 +18,7 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "connection.h"
+#include "incl.h"
 
 #define CONNECTION_BUFFER (2048)
 
