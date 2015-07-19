@@ -54,3 +54,5 @@ int address_open_svr(Address *addr, int port);
 
 void address_write(Address *addr, FILE *file);
 
+int af_convtopf(int af);
+int pf_convtoaf(int pf);

@@ -176,3 +176,17 @@ void address_write(Address *addr, FILE *file)
 	fprintf(file, "%s", buf);
 }
 
+int af_convtopf(int af)
+{
+	if (af == AF_INET)
+		return PF_INET;
+	else return PF_INET6;
+}
+
+int pf_convtoaf(int pf)
+{
+	if (pf == PF_INET)
+		return AF_INET;
+	else return AF_INET6;
+}
+

@@ -30,6 +30,7 @@ typedef void (*ConnectorCB)(Connector *info);
 
 struct _Connector
 {
+	//Out params
 	int socks_status;
 	int remote_fd;
 	Interface *iface;
@@ -50,6 +51,30 @@ Connector *connector_connect_by_name
 Connector *connector_connect_by_addr
 	(struct sockaddr *addr, InterfaceManager *manager,
 	ConnectorCB cb, gpointer data);
+	
+void connector_cancel(Connector *connector);
+
+////////////////////////////////////////////////////////////////////////
+//New code
+
+
+typedef struct _Connector Connector;
+
+typedef void (*ConnectorCB)(Connector *info, void *data);
+
+struct _Connector
+{
+	//Out params
+	int socks_status;
+	int fd;
+	Interface *iface;
+};
+
+Connector *connector_connect_by_name
+	(const char *name, int port, ConnectorCB cb, gpointer data);
+
+Connector *connector_connect_by_addr
+	(Sockaddr *saddr, ConnectorCB cb, gpointer data);
 	
 void connector_cancel(Connector *connector);
 

@@ -41,6 +41,7 @@ int fd_set_blocking(int fd, int val);
 
 //Allocation
 
-//Event loop
+//Event loop (Requires init)
 extern struct event_base *evbase;
+
 

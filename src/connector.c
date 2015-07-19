@@ -268,3 +268,70 @@ void connector_cancel(Connector *connector)
 {
 	connector->cancelled = 1;
 }
+
+////////////////////////////////////////////////////////////////////////
+//new code
+
+typedef struct
+{
+	Connector o;
+	
+	int resolving;
+	ConnectorCB cb;
+	void *cb_data;
+	
+	Sockaddr saddr
+	struct event *evt;
+	
+} ConnectorI;
+
+void connector_connect_check(evutil_socket_t fd, short events, void *data)
+{
+	ConnectorI *op = (Connector *) data;
+	int close_fd = 1;
+	
+	if (connect(op->o.fd, op->saddr.x.x, op->saddr.len) == 0)
+	{
+		//success
+		op->o.socks_status = 0;
+	}
+	else
+	{
+		//failure
+		if (errno == ENETUNREACH)
+			op->o.socks_status = 3;
+		else if (errno == ECONNREFUSED)
+			op->o.socks_status = 5;
+		else if (errno == ETIMEDOUT)
+			op->o.socks_status = 6;
+		else 
+			op->o.socks_status = 1;
+		close_fd = 0;
+	}
+	
+	//Cleanup
+	event_del(op->evt);
+	event_free(op->evt);
+	if (close_fd)
+	{
+		close(op->o.fd);
+		interface_close(op->o.iface);
+		op->o.fd = 0;
+		op->o.iface = NULL;
+	}
+	
+	//Call the callback
+	(* op->cb) ((Connector *) op, op->cb_data);
+	
+	//Free
+	free(op);
+}
+
+void connector_connect_prepare(ConnectorI *op, Sockaddr *saddr)
+{
+	int pf;
+	op->saddr = *saddr;
+	
+	
+	op->evt = event_new(evbase, op->
+}
