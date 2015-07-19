@@ -547,7 +547,7 @@ static void connection_finalize(GSource *source)
 	}
 	
 	close(connection->lanes[0].in_fd.fd);
-	if (connection->lanes[0].in_fd.fd == connection->lanes[1].in_fd.fd)
+	if (connection->lanes[0].in_fd.fd != connection->lanes[1].in_fd.fd)
 		close(connection->lanes[1].in_fd.fd);
 }
 
