@@ -42,7 +42,6 @@ typedef struct
 } Address;
 
 #define PORT ':'
-
 #define METRIC '@'
 
 void address_read(Address *addr, const char *str, int *suffix, char what);
@@ -52,4 +51,6 @@ void address_create_sockaddr(Address *addr, int port, Sockaddr *saddr);
 int address_open_iface(Address *addr);
 
 int address_open_svr(Address *addr, int port);
+
+void address_write(Address *addr, FILE *file);
 

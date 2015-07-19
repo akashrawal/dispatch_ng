@@ -148,9 +148,31 @@ int address_open_svr(Address *addr, int port)
 	int fd = address_open_bound_socket(addr, port);
 	
 	if (listen(fd, 10) < 0)
-		abort_with_liberror("listen():");
+		abort_with_liberror("listen()");
 	
 	return fd;
 }
 
+void address_write(Address *addr, FILE *file)
+{
+	void *ap;
+	int af;
+	char buf[64];
+	
+	if (addr->type == ADDRESS_INET)
+	{
+		ap = &(addr->x.v4.sin_addr);
+		af = AF_INET;
+	}
+	else 
+	{
+		ap = &(addr->x.v6.sin6_addr);
+		af = AF_INET6;
+	}
+	
+	if (! inet_ntop(af, ap, buf, 64))
+		abort_with_liberror("inet_ntop()");
+	
+	fprintf(file, "%s", buf);
+}
 
