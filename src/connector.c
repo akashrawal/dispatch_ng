@@ -20,9 +20,6 @@
 
 #include "incl.h"
 
-////////////////////////////////////////////////////////////////////////
-//new code
-
 void connector_cancel(Connector *connector)
 {
 	event_del(connector->evt);

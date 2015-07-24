@@ -268,7 +268,7 @@ static void session_prepare(Session *session)
 			session->lanes[lane].evt = NULL;
 		}
 		
-		
+		/*
 		session_log(session, "session_prepare(%d): events = (%d, %d), lane = (%d, %d), opposite = (%d, %d)",
 			lane, events & EV_READ, events & EV_WRITE,
 			session->lanes[lane].start, session->lanes[lane].end,
@@ -279,7 +279,7 @@ static void session_prepare(Session *session)
 			session_log(session, "Assertion failure");
 			abort();
 		}
-		
+		*/
 		
 		session->lanes[lane].evt = event_new
 			(evbase, session->lanes[lane].fd, events, 
