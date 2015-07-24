@@ -29,6 +29,13 @@ typedef struct
 	} x;
 } Sockaddr;
 
+void sockaddr_copy(Sockaddr *addr, 
+	struct sockaddr *src_addr, socklen_t src_addr_len);
+
+void sockaddr_getsockname(Sockaddr *addr, int fd);
+
+void sockaddr_write(Sockaddr *addr, FILE *file);
+
 #define ADDRESS_INET  (1 << 0)
 #define ADDRESS_OFF_INET  (0)
 #define ADDRESS_INET6 (1 << 1)

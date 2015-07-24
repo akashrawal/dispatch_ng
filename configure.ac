@@ -12,7 +12,7 @@ AM_SILENT_RULES([yes])
 AC_PROG_CC
 
 # Checks for libraries.
-PKG_CHECK_MODULES([DISPATCH_NG], [glib-2.0 >= 2.32])
+AC_CHECK_LIB([event], [event_base_new], [], [AC_MSG_ERROR(["could not find required library libevent"])])
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h string.h sys/socket.h])

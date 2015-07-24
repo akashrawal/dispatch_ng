@@ -31,6 +31,7 @@
 #include <errno.h>
 
 #include <event2/event.h>
+#include <event2/dns.h>
 
 #include "utils.h"
 #include "address.h"

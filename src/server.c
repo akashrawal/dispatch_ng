@@ -18,86 +18,41 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "server.h"
+#include "incl.h"
+
 
 typedef struct
 {
-	GSource source;
-	GPollFD fd;
-	InterfaceManager *manager;
+	int fd;
+	struct event *evt;
 } Server;
 
-static gboolean server_prepare(GSource *source, gint *timeout)
+void server_check(evutil_socket_t fd, short events, void *data)
 {
-	Server *server = (Server *) source;
-	
-	server->fd.revents = 0;
-	*timeout = -1;
-	return FALSE;
-}
-
-static gboolean server_check(GSource *source)
-{
-	Server *server = (Server *) source;
-	
-	if (server->fd.revents & G_IO_IN)
-		return TRUE;
-	return FALSE;
-}
-
-static gboolean server_dispatch
-	(GSource *source, GSourceFunc cb, gpointer data)
-{
-	Server *server = (Server *) source;
 	int client_fd;
 	
-	client_fd = accept(server->fd.fd, NULL, NULL);
+	client_fd = accept(fd, NULL, NULL);
 	if (client_fd < 0)
 		abort_with_liberror("accept()");
 	
-	connection_create(client_fd, server->manager);
-	
-	return G_SOURCE_CONTINUE;
+	session_create(client_fd);
 }
 
-static void server_finalize(GSource *source)
-{
-	Server *server = (Server *) source;
-	
-	close(server->fd.fd);
-}
-
-GSourceFuncs server_funcs = 
-{
-	server_prepare,
-	server_check,
-	server_dispatch,
-	server_finalize
-};
-
-//Creates server socket listening at given interface
-guint server_create(Interface *iface, InterfaceManager *manager)
+void server_create(const char *str)
 {
 	Server *server;
-	guint tag;
+	Address addr;
+	int port;
 	
-	//Create GSource
-	server = (Server *) g_source_new(&server_funcs, sizeof(Server));
+	server = (Server *) fs_malloc(sizeof(Server));
 	
-	//Create socket
-	server->fd.fd = interface_open_server(iface);
+	address_read(&addr, str, &port, PORT);
+	if (port <= 0)
+		port = 1080;
+	server->fd = address_open_svr(&addr, port);
 	
-	//Set nonblocking
-	fd_set_blocking(server->fd.fd, 0);
-	
-	//Init
-	server->fd.events = G_IO_IN;
-	server->manager = manager;
-	g_source_add_poll((GSource *) server, &(server->fd));
-	
-	//Add to default context
-	tag = g_source_attach((GSource *) server, NULL);
-	g_source_unref((GSource *) server);
-	
-	return tag;
+	fd_set_blocking(server->fd, 0);
+	server->evt = event_new(evbase, server->fd, EV_READ | EV_PERSIST, 
+		server_check, server);
+	event_add(server->evt, NULL);
 }

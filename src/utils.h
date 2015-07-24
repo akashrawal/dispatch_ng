@@ -41,7 +41,11 @@ int fd_set_blocking(int fd, int val);
 
 //Allocation
 
+void *fs_malloc(size_t size);
+
+void *fs_realloc(void *mem, size_t size);
+
 //Event loop (Requires init)
 extern struct event_base *evbase;
 
-
+void utils_init();

@@ -41,6 +41,8 @@ Interface *balancer_add_from_string(const char *str)
 	iface = (Interface *) fs_malloc(sizeof(Interface));
 	
 	address_read(&(iface->addr), str, &(iface->metric), METRIC); 
+	if (iface->metric < 0)
+		iface->metric = 1;
 	iface->use_count = 0;
 	
 	iface->next = ifaces;
@@ -79,6 +81,11 @@ Interface *balancer_select(int addr_mask)
 				selected = iter;
 				selected_cost = iter_cost;
 			}
+		}
+		else
+		{
+			selected = iter;
+			selected_cost = iter_cost;
 		}
 	}
 	

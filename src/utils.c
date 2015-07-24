@@ -112,3 +112,10 @@ int fd_set_blocking(int fd, int val)
 //Event loop
 
 struct event_base *evbase;
+
+
+//Module initializer
+void utils_init()
+{
+	evbase = event_base_new();
+}

@@ -18,63 +18,49 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-typedef enum
+
+typedef struct 
 {
-	CONNECTOR_NAME,
-	CONNECTOR_ADDR
-} ConnectorSource;
-
-typedef struct _Connector Connector;
-
-typedef void (*ConnectorCB)(Connector *info);
-
-struct _Connector
-{
-	//Out params
-	int socks_status;
-	int remote_fd;
-	Interface *iface;
-	InterfaceManager *manager;
-	
-	//Private
-	ConnectorSource source;
-	ConnectorCB cb;
-	gpointer data;
-	int cancelled;
-};
-
-
-Connector *connector_connect_by_name
-	(const char *name, int port, InterfaceManager *manager, 
-	ConnectorCB cb, gpointer data);
-
-Connector *connector_connect_by_addr
-	(struct sockaddr *addr, InterfaceManager *manager,
-	ConnectorCB cb, gpointer data);
-	
-void connector_cancel(Connector *connector);
-
-////////////////////////////////////////////////////////////////////////
-//New code
-
-
-typedef struct _Connector Connector;
-
-typedef void (*ConnectorCB)(Connector *info, void *data);
-
-struct _Connector
-{
-	//Out params
 	int socks_status;
 	int fd;
 	Interface *iface;
-};
+} ConnectRes;
 
-Connector *connector_connect_by_name
-	(const char *name, int port, ConnectorCB cb, gpointer data);
+typedef void (*ConnectorCB)(ConnectRes res, void *data);
 
-Connector *connector_connect_by_addr
-	(Sockaddr *saddr, ConnectorCB cb, gpointer data);
+typedef struct 
+{
+	int fd;
+	Interface *iface;
+	struct event *evt;
+	
+	ConnectorCB cb;
+	void *data;
+} Connector;
+
+Connector *connector_connect
+	(Sockaddr saddr, ConnectorCB cb, void *data);
 	
 void connector_cancel(Connector *connector);
+
+
+extern struct evdns_base *dns_base;
+
+typedef struct 
+{
+	struct evdns_getaddrinfo_request *dns_query;
+	struct evutil_addrinfo *addrs;
+	struct evutil_addrinfo *addrs_iter;
+	Connector *connector;
+	
+	ConnectorCB cb;
+	void *data;
+} DnsConnector;
+
+DnsConnector *dns_connector_connect
+	(const char *name, int port, ConnectorCB cb, void *data);
+
+void dns_connector_cancel(DnsConnector *dc);
+
+void connector_init();
 

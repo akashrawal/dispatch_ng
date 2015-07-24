@@ -20,318 +20,252 @@
 
 #include "incl.h"
 
-typedef struct
-{
-	Connector parent;
-	int port;
-	char name[1];
-} ConnectorByName;
-
-typedef struct
-{
-	Connector parent;
-	struct sockaddr addr;
-} ConnectorByAddr;
-
-typedef struct
-{
-	Connector parent;
-	struct sockaddr_in addr;
-} ConnectorByAddr4;
-
-typedef struct
-{
-	Connector parent;
-	struct sockaddr_in6 addr;
-} ConnectorByAddr6;
-
-gboolean connector_idle(gpointer data)
-{
-	Connector *info = (Connector *) data;
-		
-	//Call callback and free structure
-	if (! info->cancelled)
-		(* info->cb)(info);
-	
-	//Free data
-	g_free(data);
-	
-	return G_SOURCE_REMOVE;
-}
-
-
-gpointer connector_thread(gpointer data)
-{
-	Connector *info = (Connector *) data;
-	
-	if (info->source == CONNECTOR_NAME)
-	{
-		ConnectorByName *by_name = (ConnectorByName *) info;
-		char port_str[16];
-		struct addrinfo hints, *addrs, *iter;
-		int resolve_status, addr_type, saved_errno, remote_fd;
-		Interface *iface;
-		
-		//Resolve domain name
-		sprintf(port_str, "%d", by_name->port);
-		hints.ai_flags = 0;
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_protocol = 0;
-		hints.ai_addrlen = 0;
-		hints.ai_addr = NULL;
-		hints.ai_canonname = NULL;
-		hints.ai_next = NULL;
-		
-		resolve_status = getaddrinfo
-			(by_name->name, port_str, &hints, &addrs);
-		
-		//Error checking
-		if (resolve_status != 0)
-		{
-			info->socks_status = 1;
-			goto end;
-		}
-		
-		//Get interface
-		addr_type = 0;
-		for (iter = addrs; iter; iter = iter->ai_next)
-		{
-			if (iter->ai_socktype == AF_INET)
-				addr_type |= INTERFACE_INET;
-			else if (iter->ai_socktype == AF_INET6)
-				addr_type |= INTERFACE_INET6;
-		}
-		iface = interface_manager_get(info->manager, addr_type);
-		
-		//See if we got an interface
-		if (! iface)
-		{
-			info->socks_status = 3;
-			goto end;
-		}
-		
-		//Connect
-		remote_fd = -1;
-		for (iter = addrs; iter; iter = iter->ai_next)
-		{
-			if (iface->addr.sa_family == iter->ai_socktype)
-			{
-				remote_fd = interface_open(iface);
-				
-				if (connect(remote_fd, iter->ai_addr, iter->ai_addrlen) >= 0)
-					break;
-				saved_errno = errno;
-				
-				close(remote_fd);
-				interface_close(iface);
-				remote_fd = -1;
-			}
-		}
-		
-		//Error checking
-		if (remote_fd >= 0)
-		{
-			//success
-			info->remote_fd = remote_fd;
-			info->iface = iface;
-		}
-		else
-		{
-			if (saved_errno == ECONNREFUSED)
-				info->socks_status = 5;
-			else if (saved_errno == ENETUNREACH)
-				info->socks_status = 3;
-			else
-				info->socks_status = 1;
-		}
-		
-		freeaddrinfo(addrs);
-	}
-	else
-	{
-		ConnectorByAddr *by_addr = (ConnectorByAddr *) info;
-		int addr_len;
-		int remote_fd;
-		Interface *iface;
-		
-		//Get address length and interface
-		if (by_addr->addr.sa_family == AF_INET)
-		{
-			addr_len = sizeof(struct sockaddr_in);
-			iface = interface_manager_get
-				(info->manager, INTERFACE_INET);
-		}
-		else
-		{
-			addr_len = sizeof(struct sockaddr_in6);
-			iface = interface_manager_get
-				(info->manager, INTERFACE_INET6);
-		}
-		
-		//See if we got an interface
-		if (! iface)
-		{
-			info->socks_status = 3;
-			goto end;
-		}
-		
-		//Connect
-		remote_fd = interface_open(iface);
-		if (connect(remote_fd, &(by_addr->addr), addr_len) < 0)
-		{
-			if (errno == ECONNREFUSED)
-				info->socks_status = 5;
-			else if (errno == ENETUNREACH)
-				info->socks_status = 3;
-			else
-				info->socks_status = 1;
-			
-			close(remote_fd);
-			interface_close(iface);
-		}
-		else
-		{
-			//Success
-			info->remote_fd = remote_fd;
-			info->iface = iface;
-		}
-	}
-	
-end:
-
-	//Add idle handler
-	g_idle_add(connector_idle, data);
-	
-	return NULL;
-}
-
-Connector *connector_connect_by_name
-	(const char *name, int port, InterfaceManager *manager,
-	 ConnectorCB cb, gpointer data)
-{
-	ConnectorByName *info;
-	
-	info = (ConnectorByName *) g_malloc
-		(sizeof(ConnectorByName) + strlen(name));
-	
-	info->parent.socks_status = 0;
-	info->parent.remote_fd = 0;
-	info->parent.iface = NULL;
-	info->parent.manager = manager;
-	info->parent.source = CONNECTOR_NAME;
-	info->parent.cb = cb;
-	info->parent.data = data;
-	info->parent.cancelled = 0;
-	info->port = port;
-	strcpy(info->name, name);
-	
-	g_thread_unref(g_thread_new(NULL, connector_thread, info));
-	
-	return (Connector *) info;
-}
-
-Connector *connector_connect_by_addr
-	(struct sockaddr *addr, InterfaceManager *manager,
-	 ConnectorCB cb, gpointer data)
-{
-	int addr_len;
-	ConnectorByAddr *info;
-	
-	if (addr->sa_family == AF_INET)
-	{
-		addr_len = sizeof(struct sockaddr_in);
-		info = (ConnectorByAddr *) g_malloc(sizeof(ConnectorByAddr4));
-	}
-	else
-	{
-		addr_len = sizeof(struct sockaddr_in6);
-		info = (ConnectorByAddr *) g_malloc(sizeof(ConnectorByAddr6));
-	}
-	
-	info->parent.socks_status = 0;
-	info->parent.remote_fd = -1;
-	info->parent.iface = NULL;
-	info->parent.manager = manager;
-	info->parent.source = CONNECTOR_ADDR;
-	info->parent.cb = cb;
-	info->parent.data = data;
-	info->parent.cancelled = 0;
-	memcpy(&(info->addr), addr, addr_len);
-	
-	g_thread_unref(g_thread_new(NULL, connector_thread, info));
-	
-	return (Connector *) info;
-}
-
-void connector_cancel(Connector *connector)
-{
-	connector->cancelled = 1;
-}
-
 ////////////////////////////////////////////////////////////////////////
 //new code
 
-typedef struct
+void connector_cancel(Connector *connector)
 {
-	Connector o;
-	
-	int resolving;
-	ConnectorCB cb;
-	void *cb_data;
-	
-	Sockaddr saddr
-	struct event *evt;
-	
-} ConnectorI;
-
-void connector_connect_check(evutil_socket_t fd, short events, void *data)
-{
-	ConnectorI *op = (Connector *) data;
-	int close_fd = 1;
-	
-	if (connect(op->o.fd, op->saddr.x.x, op->saddr.len) == 0)
+	event_del(connector->evt);
+	event_free(connector->evt);
+	if (connector->iface)
 	{
-		//success
-		op->o.socks_status = 0;
+		close(connector->fd);
+		interface_close(connector->iface);
+	}
+	free(connector);
+}
+
+static void connector_check(evutil_socket_t fd, short events, void *data)
+{
+	Connector *connector = (Connector *) data;
+	ConnectRes cres;
+	
+	if (events & (EV_READ | EV_WRITE))
+	{
+		int res;
+		socklen_t optlen = sizeof(res);
+		
+		if (getsockopt(connector->fd, SOL_SOCKET, SO_ERROR, 
+			&res, &optlen) < 0)
+		{
+			abort_with_liberror("getsockopt()");
+		}
+		
+		if (res == 0)
+		{
+			//Success
+			cres.socks_status = 0;
+			cres.fd = connector->fd;
+			cres.iface = connector->iface;
+			connector->iface = NULL;
+		}
+		else
+		{
+			//Failed
+			if (res == ENETUNREACH)
+				cres.socks_status = 3;
+			else if (res == ECONNREFUSED)
+				cres.socks_status = 5;
+			else if (res == ETIMEDOUT)
+				cres.socks_status = 6;
+			else 
+				cres.socks_status = 1;
+			
+			cres.fd = -1;
+			cres.iface = NULL;
+		}
 	}
 	else
 	{
-		//failure
-		if (errno == ENETUNREACH)
-			op->o.socks_status = 3;
-		else if (errno == ECONNREFUSED)
-			op->o.socks_status = 5;
-		else if (errno == ETIMEDOUT)
-			op->o.socks_status = 6;
-		else 
-			op->o.socks_status = 1;
-		close_fd = 0;
-	}
-	
-	//Cleanup
-	event_del(op->evt);
-	event_free(op->evt);
-	if (close_fd)
-	{
-		close(op->o.fd);
-		interface_close(op->o.iface);
-		op->o.fd = 0;
-		op->o.iface = NULL;
+		abort_with_error("Unforseen circumstances!");
 	}
 	
 	//Call the callback
-	(* op->cb) ((Connector *) op, op->cb_data);
+	(* connector->cb) (cres, connector->data);
 	
-	//Free
-	free(op);
+	//Cleanup
+	connector_cancel(connector);
 }
 
-void connector_connect_prepare(ConnectorI *op, Sockaddr *saddr)
+static void connector_no_iface_delayed
+	(evutil_socket_t fd, short events, void *data)
 {
-	int pf;
-	op->saddr = *saddr;
+	Connector *connector = (Connector *) data;
+	ConnectRes cres;
 	
+	cres.socks_status = 3;
+	cres.fd = -1;
+	cres.iface = NULL;
 	
-	op->evt = event_new(evbase, op->
+	//Call the callback
+	(* connector->cb) (cres, connector->data);
+	
+	//Cleanup
+	connector_cancel(connector);
+}
+
+
+Connector *connector_connect
+	(Sockaddr saddr, ConnectorCB cb, void *data)
+{
+	Connector *connector = (Connector *) fs_malloc(sizeof(Connector));
+	int mask;
+	
+	//Create socket
+	switch (saddr.x.x.sa_family)
+	{
+		case AF_INET: mask = ADDRESS_INET; break;
+		default: mask = ADDRESS_INET6;
+	}
+	connector->iface = balancer_select(mask);
+	if (connector->iface)
+	{
+		connector->fd = interface_open(connector->iface);
+		//Connect
+		if (connect(connector->fd, &(saddr.x.x), saddr.len) < 0)
+		{
+			if (errno != EINPROGRESS)
+				abort_with_error("connect()");
+		}
+		
+		//Setup events
+		connector->evt = event_new(evbase, connector->fd, 
+			EV_READ | EV_WRITE, connector_check, connector);
+		event_add(connector->evt, NULL);
+	}
+	else
+	{
+		connector->fd = -1;
+		connector->evt = event_new(evbase, -1, 0, 
+			connector_no_iface_delayed, connector);
+		event_active(connector->evt, 0, 0);
+	}
+	
+	connector->cb = cb;
+	connector->data = data;
+	
+	return connector;
+}
+	
+
+
+struct evdns_base *dns_base = NULL;
+
+void dns_connector_cancel(DnsConnector *dc)
+{
+	if (dc->addrs)
+		evutil_freeaddrinfo(dc->addrs);
+	if (dc->dns_query)
+		evdns_getaddrinfo_cancel(dc->dns_query);
+	if (dc->connector)
+		connector_cancel(dc->connector);
+	
+	free(dc);
+}
+
+void dns_connector_return_fail(DnsConnector *dc)
+{
+	ConnectRes cres;
+	cres.socks_status = 1;
+	cres.fd = -1;
+	cres.iface = NULL;
+	(* dc->cb)(cres, dc->data);
+	dns_connector_cancel(dc);
+}
+
+static void dns_connector_connect_prepare(DnsConnector *dc);
+
+static void dns_connector_connect_check(ConnectRes res, void *data)
+{
+	DnsConnector *dc = (DnsConnector *) data;
+	
+	dc->connector = NULL;
+	
+	if (res.socks_status == 0)
+	{
+		//success
+		(* dc->cb)(res, dc->data);
+		dns_connector_cancel(dc);
+	}
+	else
+	{
+		//Failed, try next
+		dc->addrs_iter = dc->addrs_iter->ai_next;
+		dns_connector_connect_prepare(dc);
+	}
+}
+
+static void dns_connector_connect_prepare(DnsConnector *dc)
+{
+	Sockaddr conn_addr;
+	
+	if (! dc->addrs_iter)
+	{
+		//No more addresses to try, return unsuccessfully
+		dns_connector_return_fail(dc);
+		return;
+	}
+	
+	sockaddr_copy(&conn_addr, 
+		dc->addrs_iter->ai_addr, dc->addrs_iter->ai_addrlen); 
+	
+	dc->connector = connector_connect(conn_addr, 
+		dns_connector_connect_check, dc);
+}
+
+static void dns_connector_dns_query_cb
+	(int result, struct evutil_addrinfo *res, void *arg)
+{
+	DnsConnector *dc = (DnsConnector *) arg;
+	
+	dc->dns_query = NULL;
+	
+	if (result != 0 || ! res)
+	{
+		//failed
+		dns_connector_return_fail(dc);
+		return;
+	}
+	
+	dc->addrs = res;
+	dc->addrs_iter = res;
+	
+	dns_connector_connect_prepare(dc);
+}
+
+DnsConnector *dns_connector_connect
+	(const char *name, int port, ConnectorCB cb, void *data)
+{
+	DnsConnector *dc = (DnsConnector *) fs_malloc(sizeof(DnsConnector));
+	char servname[16];
+	struct evutil_addrinfo hints;
+	
+	//Init
+	dc->dns_query = NULL;
+	dc->connector = NULL;
+	dc->addrs = NULL;
+	dc->addrs_iter = NULL;
+	dc->cb = cb;
+	dc->data = data;
+	
+	//Start a dns lookup
+	snprintf(servname, 16, "%d", port);
+	hints.ai_flags = 0;
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = 0;
+	hints.ai_addrlen = 0;
+	hints.ai_addr = NULL;
+	hints.ai_canonname = NULL;
+	hints.ai_next = NULL;
+	dc->dns_query = evdns_getaddrinfo(dns_base, name, servname, &hints, 
+		dns_connector_dns_query_cb, dc);
+	
+	return dc;
+}
+
+//Module initializer
+void connector_init()
+{
+	dns_base = evdns_base_new(evbase, 1);
 }

@@ -20,9 +20,48 @@
 
 #include "incl.h"
 
+void sockaddr_copy(Sockaddr *addr, 
+	struct sockaddr *src_addr, socklen_t src_addr_len)
+{
+	addr->len = src_addr_len;
+	memcpy(&(addr->x), src_addr, src_addr_len);
+}
+
+void sockaddr_getsockname(Sockaddr *addr, int fd)
+{
+	socklen_t len = sizeof(addr->x);
+	
+	memset(addr, 0, sizeof(Sockaddr));
+	getsockname(fd, &(addr->x.x), &len);
+	addr->len = len;
+}
+
+void sockaddr_write(Sockaddr *addr, FILE *file)
+{
+	char buf[64];
+	
+	void *ap;
+	int port;
+	
+	if (addr->x.x.sa_family == AF_INET)
+	{
+		ap = &(addr->x.v4.sin_addr);
+		port = ntohs(addr->x.v4.sin_port);
+	}
+	else 
+	{
+		ap = &(addr->x.v6.sin6_addr);
+		port = ntohs(addr->x.v6.sin6_port);
+	}
+		
+	if (! inet_ntop(addr->x.x.sa_family, ap, buf, 64))
+		abort_with_liberror("inet_ntop()");
+	
+	fprintf(file, "%s:%d", buf, port);
+}
 
 void address_read
-	(Address *addr, const char *str, int *suffix, int what)
+	(Address *addr, const char *str, int *suffix, char what)
 {
 	char *str_cp;
 	int addr_end = 0;
@@ -30,7 +69,7 @@ void address_read
 	size_t str_len;
 	
 	str_len = strlen(str);
-	str_cp = fs_malloc(str_len);
+	str_cp = fs_malloc(str_len + 1);
 	strcpy(str_cp, str);
 	
 	//First character will tell address type
@@ -46,7 +85,7 @@ void address_read
 		
 		//Read address
 		if (inet_pton(AF_INET, str_cp, 
-		              (void *) &(addr->ip) != 1)
+		              (void *) &(addr->ip)) != 1)
 		{
 			abort_with_error("Invalid address %s", str);
 		}
@@ -55,7 +94,6 @@ void address_read
 	else
 	{
 		//IPv6
-		InterfaceInet6 *inet6_iface;
 		
 		//Remove ending ']'
 		for (addr_end = 0; str_cp[addr_end]; addr_end++)
@@ -85,17 +123,15 @@ void address_read
 			s_data = atoi(str_cp + addr_end);
 			break;
 		}
-	if (s_data < 0)
-		abort_with_error("Invalid address %s", str);
 	
 	free(str_cp);
 	
 	(* suffix) = s_data;
 }
 
-void address_create_sockaddr(Address *addr, int port, Sockaddr *saddr);
+void address_create_sockaddr(Address *addr, int port, Sockaddr *saddr)
 {
-	memset(saddr, 0, sizeof(SockaddrAll));
+	memset(saddr, 0, sizeof(Sockaddr));
 	if (addr->type == ADDRESS_INET)
 	{
 		saddr->x.v4.sin_family = AF_INET;
@@ -115,7 +151,7 @@ void address_create_sockaddr(Address *addr, int port, Sockaddr *saddr);
 int address_open_bound_socket(Address *addr, int port)
 {
 	int fd;
-	SockaddrAll saddr;
+	Sockaddr saddr;
 	
 	if (addr->type == ADDRESS_INET)
 	{
@@ -145,7 +181,29 @@ int address_open_iface(Address *addr)
 
 int address_open_svr(Address *addr, int port)
 {
-	int fd = address_open_bound_socket(addr, port);
+	int fd, yes = 1;
+	Sockaddr saddr;
+	
+	if (addr->type == ADDRESS_INET)
+	{
+		fd = socket(PF_INET, SOCK_STREAM, 0);
+	}
+	else
+	{
+		fd = socket(PF_INET6, SOCK_STREAM, 0);
+	}
+	
+	if (fd < 0)
+		abort_with_liberror("socket()");
+	
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0)
+		abort_with_liberror("setsockopt(SO_REUSEADDR)");
+		
+	address_create_sockaddr(addr, port, &saddr);
+	if (bind(fd, &(saddr.x.x), saddr.len) < 0)
+		abort_with_liberror("bind()");
+	
+	fd_set_blocking(fd, 0);
 	
 	if (listen(fd, 10) < 0)
 		abort_with_liberror("listen()");
@@ -159,16 +217,11 @@ void address_write(Address *addr, FILE *file)
 	int af;
 	char buf[64];
 	
+	ap = addr->ip;
 	if (addr->type == ADDRESS_INET)
-	{
-		ap = &(addr->x.v4.sin_addr);
 		af = AF_INET;
-	}
 	else 
-	{
-		ap = &(addr->x.v6.sin6_addr);
 		af = AF_INET6;
-	}
 	
 	if (! inet_ntop(af, ap, buf, 64))
 		abort_with_liberror("inet_ntop()");
