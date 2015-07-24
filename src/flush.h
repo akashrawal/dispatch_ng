@@ -1,5 +1,5 @@
-/* server.c
- * Server socket
+/* flush.h
+ * Asynchronous flush operator
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -18,41 +18,10 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "incl.h"
 
 
-typedef struct
-{
-	int fd;
-	struct event *evt;
-} Server;
+#define BUFFER_SIZE (2048)
+#define FLUSH_TIMEOUT 20
 
-void server_check(evutil_socket_t fd, short events, void *data)
-{
-	int client_fd;
-	
-	client_fd = accept(fd, NULL, NULL);
-	if (client_fd < 0)
-		abort_with_liberror("accept()");
-	
-	session_create(client_fd);
-}
+void flush_add(int fd, void *buf, int len);
 
-void server_create(const char *str)
-{
-	Server *server;
-	Address addr;
-	int port;
-	
-	server = (Server *) fs_malloc(sizeof(Server));
-	
-	address_read(&addr, str, &port, PORT);
-	if (port <= 0)
-		port = 1080;
-	server->fd = address_open_svr(&addr, port);
-	
-	fd_set_blocking(server->fd, 0);
-	server->evt = event_new(evbase, server->fd, EV_READ | EV_PERSIST, 
-		server_check, server);
-	event_add(server->evt, NULL);
-}

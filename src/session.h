@@ -1,4 +1,4 @@
-/* connection.h
+/* session.h
  * Handles client connections.
  * 
  * Copyright 2015 Akash Rawal
@@ -18,12 +18,4 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef CONNECTION_H
-#define CONNECTION_H
-
-#include "connector.h"
-
-//Add a connection to default context
-guint connection_create(int fd, InterfaceManager *manager);
-
-#endif //CONNECTION_H
+void session_create(int fd);

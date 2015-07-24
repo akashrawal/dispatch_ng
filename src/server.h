@@ -18,13 +18,7 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SERVER_H
-#define SERVER_H
 
-#include "connection.h"
+void server_create(const char *str);
 
-//Creates server socket listening at given interface
-guint server_create(Interface *iface, InterfaceManager *manager);
-
-#endif //SERVER_H
 

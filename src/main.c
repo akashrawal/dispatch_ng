@@ -18,85 +18,54 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "server.h"
+#include "incl.h"
 
 int main(int argc, char *argv[])
 {
 	int i, len;
-	Interface *listen = NULL, *dispatch = NULL, *iter, *next;
-	InterfaceManager *manager;
-	GMainLoop *loop;
+	int bound = 0, iface_count = 0;
+	
+	//Call init functions
+	utils_init();
+	connector_init();
 	
 	//Read arguments
+	len = strlen("--bind=");
 	for (i = 1; i < argc; i++)
 	{
 		if ((strcmp(argv[i], "-h") == 0)
 			|| (strcmp(argv[i], "--help") == 0))
 		{
 			printf("Usage: $0 [--bind=addr:port] "
-				"addr1:metric1 addr2:metric2 ...\n");
+				"addr1@metric1 addr2@metric2 ...\n");
 			exit(1);
 		}
-		len = strlen("--bind=");
-		if (strncmp(argv[i], "--bind=", len) == 0)
+		else if (strncmp(argv[i], "--bind=", len) == 0)
 		{
-			iter = interface_new_from_string(argv[i] + len, 1080);
-			iter->next = listen;
-			listen = iter;
+			server_create(argv[i] + len);
+			bound = 1;
 		}
 		else
 		{
-			iter = interface_new_from_string(argv[i], 1);
-			iter->next = dispatch;
-			dispatch = iter;
+			balancer_add_from_string(argv[i]);
+			iface_count++;
 		}
 	}
 	
-	//Default listening addresses
-	if (! listen)
-	{
-		iter = interface_new_from_string("127.0.0.1", 1080);
-		iter->next = listen;
-		listen = iter;
-		
-		iter = interface_new_from_string("[::1]", 1080);
-		iter->next = listen;
-		listen = iter;
-	}
-	
-	if (! dispatch)
+	if (! iface_count)
 	{
 		abort_with_error("No addresses to dispatch.");
 	}
 	
-	//Print details
-	printf("SOCKS server listening at");
-	for (iter = listen; iter; iter = iter->next)
+	//Default listening addresses
+	if (! bound)
 	{
-		printf(" ");
-		interface_write(iter);
+		server_create("127.0.0.1:1080");
+		server_create("[::1]:1080");
 	}
-	printf("\nDispatching to addresses");
-	for (iter = dispatch; iter; iter = iter->next)
-	{
-		printf(" ");
-		interface_write(iter);
-	}
-	printf("\n");
 	
 	//Start dispatch
-	manager = interface_manager_new();
-	for (iter = dispatch; iter; iter = next)
-	{
-		next = iter->next;
-		interface_manager_add(manager, iter);
-	}
-	for (iter = listen; iter; iter = iter->next)
-	{
-		server_create(iter, manager);
-	}
-	loop = g_main_loop_new(NULL, FALSE);
-	g_main_loop_run(loop);
+	event_base_loop(evbase, 0);
 	
 	return 0;
 }

@@ -18,21 +18,6 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef UTILS_H
-#define UTILS_H
-
-#include <glib.h>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdarg.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <string.h>
-#include <errno.h>
 
 
 #ifndef EWOULDBLOCK
@@ -45,6 +30,7 @@
 #endif
 #endif
 
+
 //Error reporting
 
 void abort_with_error(const char *fmt, ...);
@@ -53,4 +39,13 @@ void abort_with_liberror(const char *fmt, ...);
 
 int fd_set_blocking(int fd, int val);
 
-#endif 
+//Allocation
+
+void *fs_malloc(size_t size);
+
+void *fs_realloc(void *mem, size_t size);
+
+//Event loop (Requires init)
+extern struct event_base *evbase;
+
+void utils_init();

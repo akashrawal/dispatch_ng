@@ -1,5 +1,5 @@
-/* server.c
- * Server socket
+/* balancer.h
+ * Outgoing interface abstraction and load balancing algorithm
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -18,41 +18,25 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "incl.h"
 
-
-typedef struct
+typedef struct _Interface Interface;
+struct _Interface
 {
-	int fd;
-	struct event *evt;
-} Server;
-
-void server_check(evutil_socket_t fd, short events, void *data)
-{
-	int client_fd;
-	
-	client_fd = accept(fd, NULL, NULL);
-	if (client_fd < 0)
-		abort_with_liberror("accept()");
-	
-	session_create(client_fd);
-}
-
-void server_create(const char *str)
-{
-	Server *server;
+	Interface *next;
+	int metric;
+	int use_count;
 	Address addr;
-	int port;
-	
-	server = (Server *) fs_malloc(sizeof(Server));
-	
-	address_read(&addr, str, &port, PORT);
-	if (port <= 0)
-		port = 1080;
-	server->fd = address_open_svr(&addr, port);
-	
-	fd_set_blocking(server->fd, 0);
-	server->evt = event_new(evbase, server->fd, EV_READ | EV_PERSIST, 
-		server_check, server);
-	event_add(server->evt, NULL);
-}
+};
+
+int interface_open(Interface *iface);
+
+void interface_close(Interface *iface);
+
+
+Interface *balancer_add_from_string(const char *str);
+
+void balancer_dump();
+
+Interface *balancer_select(int addr_mask);
+
+

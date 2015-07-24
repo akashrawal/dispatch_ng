@@ -1,5 +1,5 @@
-/* server.c
- * Server socket
+/* incl.h
+ * Common includes
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -18,41 +18,25 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "incl.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdarg.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <string.h>
+#include <errno.h>
 
-typedef struct
-{
-	int fd;
-	struct event *evt;
-} Server;
+#include <event2/event.h>
+#include <event2/dns.h>
 
-void server_check(evutil_socket_t fd, short events, void *data)
-{
-	int client_fd;
-	
-	client_fd = accept(fd, NULL, NULL);
-	if (client_fd < 0)
-		abort_with_liberror("accept()");
-	
-	session_create(client_fd);
-}
-
-void server_create(const char *str)
-{
-	Server *server;
-	Address addr;
-	int port;
-	
-	server = (Server *) fs_malloc(sizeof(Server));
-	
-	address_read(&addr, str, &port, PORT);
-	if (port <= 0)
-		port = 1080;
-	server->fd = address_open_svr(&addr, port);
-	
-	fd_set_blocking(server->fd, 0);
-	server->evt = event_new(evbase, server->fd, EV_READ | EV_PERSIST, 
-		server_check, server);
-	event_add(server->evt, NULL);
-}
+#include "utils.h"
+#include "address.h"
+#include "balancer.h"
+#include "connector.h"
+#include "flush.h"
+#include "session.h"
+#include "server.h"
