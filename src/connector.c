@@ -215,6 +215,10 @@ static void dns_connector_dns_query_cb
 {
 	DnsConnector *dc = (DnsConnector *) arg;
 	
+	//If cancelled... Don't touch me, you'll be dead too
+	if (result == EVUTIL_EAI_CANCEL)
+		return;
+	
 	dc->dns_query = NULL;
 	
 	if (result != 0 || ! res)
