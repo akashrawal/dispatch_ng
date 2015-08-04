@@ -19,11 +19,16 @@
  */
 
 #include "incl.h"
+#include <signal.h>
 
 int main(int argc, char *argv[])
 {
 	int i, len;
 	int bound = 0, iface_count = 0;
+	int loop_stat;
+	
+	//Ignore that useless signal
+	signal(SIGPIPE, SIG_IGN);
 	
 	//Call init functions
 	utils_init();
@@ -65,7 +70,9 @@ int main(int argc, char *argv[])
 	}
 	
 	//Start dispatch
-	event_base_loop(evbase, 0);
+	
+	loop_stat = event_base_loop(evbase, 0);
+	abort_with_liberror("event_base_loop() returned %d", loop_stat); 
 	
 	return 0;
 }

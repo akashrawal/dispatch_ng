@@ -122,7 +122,7 @@ Connector *connector_connect
 		if (connect(connector->fd, &(saddr.x.x), saddr.len) < 0)
 		{
 			if (errno != EINPROGRESS)
-				abort_with_error("connect()");
+				abort_with_liberror("connect()");
 		}
 		
 		//Setup events
