@@ -167,7 +167,8 @@ int address_open_bound_socket(Address *addr, int port)
 		
 	address_create_sockaddr(addr, port, &saddr);
 	if (bind(fd, &(saddr.x.x), saddr.len) < 0)
-		abort_with_liberror("bind()");
+		abort_with_liberror("bind(fd=%d, addr=%s)", 
+			fd, inet_ntoa(saddr.x.v4.sin_addr));
 	
 	fd_set_blocking(fd, 0);
 	
@@ -201,7 +202,8 @@ int address_open_svr(Address *addr, int port)
 		
 	address_create_sockaddr(addr, port, &saddr);
 	if (bind(fd, &(saddr.x.x), saddr.len) < 0)
-		abort_with_liberror("bind()");
+		abort_with_liberror("bind(fd=%d, addr=%s)", 
+			fd, inet_ntoa(saddr.x.v4.sin_addr));
 	
 	fd_set_blocking(fd, 0);
 	
