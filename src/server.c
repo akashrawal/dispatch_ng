@@ -55,4 +55,6 @@ void server_create(const char *str)
 	server->evt = event_new(evbase, server->fd, EV_READ | EV_PERSIST, 
 		server_check, server);
 	event_add(server->evt, NULL);
+	
+	printf("Listening at %s\n", str);
 }

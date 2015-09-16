@@ -51,14 +51,20 @@ Interface *balancer_add_from_string(const char *str)
 	return iface;
 }
 
-void balancer_dump()
+void balancer_verify()
 {
 	Interface *iter;
 	
 	for (iter = ifaces; iter; iter = iter->next)
 	{
+		int fd;
+		
+		printf("Testing ");
 		address_write(&(iter->addr), stdout);
-		printf("@%d\n",  iter->metric);
+		printf("@%d...\n",  iter->metric);
+		
+		fd = address_open_iface(&(iter->addr));
+		close(fd);
 	}
 }
 

@@ -69,8 +69,11 @@ int main(int argc, char *argv[])
 		server_create("[::1]:1080");
 	}
 	
-	//Start dispatch
+	//Test dispatch addresses
+	balancer_verify();
 	
+	//Start dispatch
+	printf("Running...\n");
 	loop_stat = event_base_loop(evbase, 0);
 	abort_with_liberror("event_base_loop() returned %d", loop_stat); 
 	

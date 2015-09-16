@@ -35,7 +35,7 @@ void interface_close(Interface *iface);
 
 Interface *balancer_add_from_string(const char *str);
 
-void balancer_dump();
+void balancer_verify();
 
 Interface *balancer_select(int addr_mask);
 
