@@ -167,8 +167,18 @@ int address_open_bound_socket(Address *addr, int port)
 		
 	address_create_sockaddr(addr, port, &saddr);
 	if (bind(fd, &(saddr.x.x), saddr.len) < 0)
-		abort_with_liberror("bind(fd=%d, addr=%s)", 
-			fd, inet_ntoa(saddr.x.v4.sin_addr));
+	{
+		//TODO: improved error handling
+		fprintf(stderr, "ERROR: Could not bind to interface address "
+			"%s. Check your interface addresses. \n"
+			"bind(fd=%d, addr=%s): %s\n\n", 
+			inet_ntoa(saddr.x.v4.sin_addr), 
+			fd, inet_ntoa(saddr.x.v4.sin_addr), strerror(errno));
+		
+		close(fd);
+		
+		return -1;
+	}
 	
 	fd_set_blocking(fd, 0);
 	

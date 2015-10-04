@@ -22,8 +22,12 @@
 
 int interface_open(Interface *iface)
 {
-	iface->use_count++;
-	return address_open_iface(&(iface->addr));
+	int fd = address_open_iface(&(iface->addr));
+	
+	if (fd >= 0)
+		iface->use_count++;
+		
+	return fd;
 }
 
 void interface_close(Interface *iface)
@@ -54,6 +58,7 @@ Interface *balancer_add_from_string(const char *str)
 void balancer_verify()
 {
 	Interface *iter;
+	int fail_count = 0;
 	
 	for (iter = ifaces; iter; iter = iter->next)
 	{
@@ -64,8 +69,14 @@ void balancer_verify()
 		printf("@%d...\n",  iter->metric);
 		
 		fd = address_open_iface(&(iter->addr));
-		close(fd);
+		if (fd >= 0)
+			close(fd);
+		else fail_count++;
 	}
+	
+	if (fail_count)
+		abort_with_error("%d interfaces are not working, "
+			"check your network settings and addresses. \n");
 }
 
 Interface *balancer_select(int addr_mask)

@@ -115,9 +115,13 @@ Connector *connector_connect
 		default: mask = ADDRESS_INET6;
 	}
 	connector->iface = balancer_select(mask);
+	connector->fd = -1;
 	if (connector->iface)
 	{
 		connector->fd = interface_open(connector->iface);
+	}
+	if (connector->fd >= 0)
+	{
 		//Connect
 		if (connect(connector->fd, &(saddr.x.x), saddr.len) < 0)
 		{
