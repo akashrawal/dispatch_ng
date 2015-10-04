@@ -37,6 +37,7 @@ Interface *balancer_add_from_string(const char *str);
 
 void balancer_verify();
 
+//TODO: Use other interfaces if an interface fails to bind
 Interface *balancer_select(int addr_mask);
 
 
