@@ -341,7 +341,7 @@ static void session_write_socks_error
 	buffer[8] = 0;
 	buffer[9] = 0;
 	session_log(session, 
-		"SOCKS error code %d sent", socks_errcode);
+		"SOCKS error code %s sent", socks_reply_to_str(socks_errcode));
 	session_close(session);
 }
 

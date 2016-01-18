@@ -5,6 +5,7 @@ dispatch_ng_SOURCES = incl.h \
                       utils.c      utils.h            \
                       address.c    address.h          \
                       balancer.c   balancer.h         \
+                      socks.c      socks.h            \
                       connector.c  connector.h        \
                       flush.c      flush.h            \
                       session.c    session.h          \

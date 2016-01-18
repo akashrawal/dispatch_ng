@@ -51,7 +51,7 @@ static void connector_check(evutil_socket_t fd, short events, void *data)
 		if (res == 0)
 		{
 			//Success
-			cres.socks_status = 0;
+			cres.socks_status = SOCKS_REPLY_SUCCESS;
 			cres.fd = connector->fd;
 			cres.iface = connector->iface;
 			connector->iface = NULL;
@@ -60,13 +60,14 @@ static void connector_check(evutil_socket_t fd, short events, void *data)
 		{
 			//Failed
 			if (res == ENETUNREACH)
-				cres.socks_status = 3;
+				cres.socks_status = SOCKS_REPLY_NETUNREACH;
 			else if (res == ECONNREFUSED)
-				cres.socks_status = 5;
+				cres.socks_status = SOCKS_REPLY_CONNREFUSED;
 			else if (res == ETIMEDOUT)
-				cres.socks_status = 6;
+				cres.socks_status = SOCKS_REPLY_TTLEXPIRED;
 			else 
-				cres.socks_status = 1;
+				cres.socks_status = SOCKS_REPLY_GEN;
+				//TODO: More information for the final else
 			
 			cres.fd = -1;
 			cres.iface = NULL;
@@ -90,7 +91,7 @@ static void connector_no_iface_delayed
 	Connector *connector = (Connector *) data;
 	ConnectRes cres;
 	
-	cres.socks_status = 3;
+	cres.socks_status = SOCKS_REPLY_NETUNREACH;
 	cres.fd = -1;
 	cres.iface = NULL;
 	
@@ -167,7 +168,7 @@ void dns_connector_cancel(DnsConnector *dc)
 void dns_connector_return_fail(DnsConnector *dc)
 {
 	ConnectRes cres;
-	cres.socks_status = 1;
+	cres.socks_status = SOCKS_REPLY_GEN;
 	cres.fd = -1;
 	cres.iface = NULL;
 	(* dc->cb)(cres, dc->data);
@@ -182,7 +183,7 @@ static void dns_connector_connect_check(ConnectRes res, void *data)
 	
 	dc->connector = NULL;
 	
-	if (res.socks_status == 0)
+	if (res.socks_status == SOCKS_REPLY_SUCCESS)
 	{
 		//success
 		(* dc->cb)(res, dc->data);

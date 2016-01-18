@@ -1,5 +1,5 @@
-/* incl.h
- * Common includes
+/* socks.h
+ * SOCKS numerical codes
  * 
  * Copyright 2015 Akash Rawal
  * This file is part of dispatch_ng.
@@ -18,26 +18,26 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "incl.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdarg.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <string.h>
-#include <errno.h>
 
-#include <event2/event.h>
-#include <event2/dns.h>
+static char *socks_error_strings[10] = {
+	"0 (SOCKS_REPLY_SUCCESS, Succeded)",
+	"1 (SOCKS_REPLY_GEN general, SOCKS server failure)",
+	"2 (SOCKS_REPLY_CONN_NOT_ALLOWED, connection not allowed by ruleset)",
+	"3 (SOCKS_REPLY_NETUNREACH, Network unreachable)",
+	"4 (SOCKS_REPLY_HOSTUNREACH, Host unreachable)",
+	"5 (SOCKS_REPLY_CONNREFUSED, Connection refused)",
+	"6 (SOCKS_REPLY_TTLEXPIRED, TTL expired)",
+	"7 (SOCKS_REPLY_CMD, Command not supported)",
+	"8 (SOCKS_REPLY_ATYPE, Address type not supported)",
+	"Invalid reply code"
+};
 
-#include "utils.h"
-#include "address.h"
-#include "balancer.h"
-#include "socks.h"
-#include "connector.h"
-#include "flush.h"
-#include "session.h"
-#include "server.h"
+const char *socks_reply_to_str(int code)
+{
+	if (code < 0 || code > 8)
+		code = 9;
+	
+	return socks_error_strings[code];
+}
