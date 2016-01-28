@@ -23,7 +23,7 @@
 
 static char *socks_error_strings[10] = {
 	"0 (SOCKS_REPLY_SUCCESS, Succeded)",
-	"1 (SOCKS_REPLY_GEN general, SOCKS server failure)",
+	"1 (SOCKS_REPLY_GEN, general SOCKS server failure)",
 	"2 (SOCKS_REPLY_CONN_NOT_ALLOWED, connection not allowed by ruleset)",
 	"3 (SOCKS_REPLY_NETUNREACH, Network unreachable)",
 	"4 (SOCKS_REPLY_HOSTUNREACH, Host unreachable)",
