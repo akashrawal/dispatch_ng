@@ -66,8 +66,10 @@ static void connector_check(evutil_socket_t fd, short events, void *data)
 			else if (res == ETIMEDOUT)
 				cres.socks_status = SOCKS_REPLY_TTLEXPIRED;
 			else 
+			{
+				fprintf(stderr, "connect() failed: %s\n", strerror(res));
 				cres.socks_status = SOCKS_REPLY_GEN;
-				//TODO: More information for the final else
+			}
 			
 			cres.fd = -1;
 			cres.iface = NULL;
@@ -192,6 +194,8 @@ static void dns_connector_connect_check(ConnectRes res, void *data)
 	else
 	{
 		//Failed, try next
+		fprintf(stderr, "Socks code %s while trying out addresses\n",
+			socks_reply_to_str(res.socks_status));
 		dc->addrs_iter = dc->addrs_iter->ai_next;
 		dns_connector_connect_prepare(dc);
 	}
@@ -204,6 +208,7 @@ static void dns_connector_connect_prepare(DnsConnector *dc)
 	if (! dc->addrs_iter)
 	{
 		//No more addresses to try, return unsuccessfully
+		fprintf(stderr, "Connection to all addresses failed\n");
 		dns_connector_return_fail(dc);
 		return;
 	}
@@ -229,6 +234,7 @@ static void dns_connector_dns_query_cb
 	if (result != 0 || ! res)
 	{
 		//failed
+		fprintf(stderr, "DNS query failed\n");
 		dns_connector_return_fail(dc);
 		return;
 	}
