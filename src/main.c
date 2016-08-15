@@ -41,8 +41,8 @@ int main(int argc, char *argv[])
 		if ((strcmp(argv[i], "-h") == 0)
 			|| (strcmp(argv[i], "--help") == 0))
 		{
-			printf("Usage: $0 [--bind=addr:port] "
-				"addr1@metric1 addr2@metric2 ...\n");
+			printf("Usage: %s [--bind=addr:port] "
+				"addr1@metric1 addr2@metric2 ...\n", argv[0]);
 			exit(1);
 		}
 		else if (strncmp(argv[i], "--bind=", len) == 0)

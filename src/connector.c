@@ -104,6 +104,24 @@ static void connector_no_iface_delayed
 	connector_cancel(connector);
 }
 
+//TODO: Make this error better
+//Some refactoring will be needed
+static void connector_gen_failure_delayed
+	(evutil_socket_t fd, short events, void *data)
+{
+	Connector *connector = (Connector *) data;
+	ConnectRes cres;
+	
+	cres.socks_status = SOCKS_REPLY_GEN;
+	cres.fd = -1;
+	cres.iface = NULL;
+	
+	//Call the callback
+	(* connector->cb) (cres, connector->data);
+	
+	//Cleanup
+	connector_cancel(connector);
+}
 
 Connector *connector_connect
 	(Sockaddr saddr, ConnectorCB cb, void *data)
@@ -125,17 +143,30 @@ Connector *connector_connect
 	}
 	if (connector->fd >= 0)
 	{
+		int connect_res;
+		int connect_errno;
 		//Connect
-		if (connect(connector->fd, &(saddr.x.x), saddr.len) < 0)
+		connect_res = connect(connector->fd, &(saddr.x.x), saddr.len);
+		connect_errno = errno;
+		if (connect_res < 0 ? connect_errno != EINPROGRESS : 0)
 		{
-			if (errno != EINPROGRESS)
-				abort_with_liberror("connect()");
+			//TODO: report this error to the client, not to stderr
+			//This will require a refactor
+			connector->fd = -1;
+			connector->evt = event_new(evbase, -1, 0, 
+				connector_gen_failure_delayed, connector);
+			event_active(connector->evt, 0, 0);
+
+			fprintf(stderr, "connect() failed: %s\n", 
+					strerror(connect_errno));
 		}
-		
-		//Setup events
-		connector->evt = event_new(evbase, connector->fd, 
-			EV_READ | EV_WRITE, connector_check, connector);
-		event_add(connector->evt, NULL);
+		else
+		{
+			//Setup events
+			connector->evt = event_new(evbase, connector->fd, 
+				EV_READ | EV_WRITE, connector_check, connector);
+			event_add(connector->evt, NULL);
+		}
 	}
 	else
 	{
