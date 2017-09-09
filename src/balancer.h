@@ -25,19 +25,23 @@ struct _Interface
 	Interface *next;
 	int metric;
 	int use_count;
-	Address addr;
+	HostAddress addr;
 };
-
-int interface_open(Interface *iface);
 
 void interface_close(Interface *iface);
 
+Interface *balancer_add(HostAddress addr, int metric);
 
-Interface *balancer_add_from_string(const char *str);
+Interface *balancer_add_from_string(const char *addr_with_metric);
 
-void balancer_verify();
+//This function might no longer be needed
+//void balancer_verify();
 
-//TODO: Use other interfaces if an interface fails to bind
-Interface *balancer_select(int addr_mask);
+extern const char balancer_error_no_iface[];
+
+const Error *balancer_open_iface(NetworkType types,
+		Interface **iface_out, SocketHandle *hd_out);
+
+NetworkType balancer_get_available_types();
 
 

@@ -1,0 +1,9 @@
+{
+   epoll_pwait_accept_null_sigmask
+   Memcheck:Param
+   epoll_pwait(sigmask)
+   fun:epoll_pwait
+   obj:/usr/lib/libevent-2.1.so.6.0.2
+   fun:event_base_loop
+   fun:main
+}

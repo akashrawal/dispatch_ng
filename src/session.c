@@ -27,38 +27,30 @@ typedef enum
 	SESSION_REMOTE = 1
 } SessionLane;
 
-typedef enum
-{
-	SESSION_AUTH,
-	SESSION_REQUEST,
-	SESSION_CONNECTING,
-	SESSION_CONNECTED
-} SessionState;
-
-typedef struct
+struct _Session
 {
 	struct {
-		int fd;
+		SocketHandle hd;
+		int hd_valid;
 		uint8_t buffer[BUFFER_SIZE];
 		int start, end;
 		struct event *evt;
 	} lanes[2];
 	
-	int state, sid;
+	int state, prev_state;
+	unsigned int sid;
 	Interface *iface;
 	Connector *connector;
-	DnsConnector *dns_connector;
-	
-} Session;
 
+	SessionStateChangeCB cb;
+	void *cb_data;
+};
+
+//Forward declarations
 static void session_prepare(Session *session);
 void session_authenticator(Session *session);
 
-static void session_note(Session *session)
-{
-	printf("Session %d: ", session->sid); 
-}
-
+//Logging functions
 static void session_log
 	(Session *session, const char *format, ...)
 {
@@ -66,7 +58,7 @@ static void session_log
 	
 	va_start(args, format);
 	
-	session_note(session);
+	printf("Session %u: ", session->sid); 
 	
 	vprintf(format, args);
 	
@@ -74,6 +66,40 @@ static void session_log
 	
 	va_end(args);
 }
+
+//State change functions
+//Does not call any callbacks
+static void session_set_state(Session *session, SessionState state)
+{
+	session->state = state;
+
+	struct
+	{
+		SessionState state;
+		const char *str;
+	} states[] = {
+#define entry(x) {x, #x}
+		entry(SESSION_AUTH),
+		entry(SESSION_REQUEST),
+		entry(SESSION_CONNECTING),
+		entry(SESSION_CONNECTED),
+		entry(SESSION_SHUTDOWN),
+		entry(SESSION_CLOSED),
+#undef entry
+		{ 0, NULL }
+	};
+
+	int i;
+	for (i = 0; states[i].str; i++)
+	{
+		if (states[i].state == state)
+			break;
+	}
+
+	session_log(session, "Session entered state %s", states[i].str);
+}
+
+//Buffer management functions
 
 //Peeks on data received from client into buffer.
 static uint8_t *session_peek(Session *session, int len)
@@ -95,8 +121,6 @@ static uint8_t *session_read(Session *session, int len)
 		return NULL;
 	session->lanes[SESSION_CLIENT].start += len;
 	
-	session_prepare(session);
-	
 	return res;
 }
 
@@ -107,95 +131,79 @@ static uint8_t *session_write_alloc(Session *session, int len)
 		+ session->lanes[SESSION_REMOTE].end;
 	session->lanes[SESSION_REMOTE].end += len;
 	
-	session_prepare(session);
-	
 	return res;
 }
 
-//Closes session and frees all resources and tries to flush data
-static void session_close(Session *session)
-{
-	int i;
-	
-	session_log(session, "Closed");
-	
-	for (i = 0; i < 2; i++)
-	{
-		int opposite = 1 - i;
-		if (session->lanes[i].evt)
-		{
-			event_del(session->lanes[i].evt);
-			event_free(session->lanes[i].evt);
-			session->lanes[i].evt = NULL;
-		}
-		if (session->lanes[i].fd >= 0)
-		{
-			flush_add(session->lanes[i].fd, 
-	session->lanes[opposite].buffer + session->lanes[opposite].start,
-	session->lanes[opposite].end - session->lanes[opposite].start);
-		}
-	}
-	
-	if (session->iface)
-		interface_close(session->iface);
-	if (session->connector)
-		connector_cancel(session->connector);
-	if (session->dns_connector)
-		dns_connector_cancel(session->dns_connector);
-	
-	free(session);
-}
+//Event management
 
-void session_shutdown(Session *session, int side)
-{
-	if (session->lanes[side].evt)
-	{
-		event_del(session->lanes[side].evt);
-		event_free(session->lanes[side].evt);
-		session->lanes[side].evt = NULL;
-	}
-	if (session->lanes[side].fd >= 0)
-	{
-		close(session->lanes[side].fd);
-		session->lanes[side].fd = -1;
-	}
-	
-	session_close(session);
-}
-
+//Responds to IO events
 static void session_check(evutil_socket_t fd, short events, void *data)
 {
+	SocketHandle hd;
 	Session *session = (Session *) data;
-	int lane, opposite, io_res;
+	int lane, opposite;
+	size_t io_res;
+	const Error *e;
+	int shutdown_needed = 0;
 	
+	//Find the socket on which we received event
 	for (lane = 0; lane < 2; lane++)
 	{
-		if (session->lanes[lane].fd == fd)
+		if (socket_handle_equal_with_native(session->lanes[lane].hd, fd))
 			break;
 	}
-	
-	/*
-	session_log(session, "session_check: fd=%d, lane=%d, events=%d\n",
-		(int) fd, lane, (int) events);
-	*/
-	
+
+	if (session->state == SESSION_CLOSED)
+	{
+		session_log(session, "TMP: events = %d", (int) events);
+		session_log(session, "TMP: fd = %d", (int) fd);
+		session_log(session, "TMP: client lane = %p",
+				session->lanes[SESSION_CLIENT].evt);
+		session_log(session, "TMP: remote lane = %p",
+				session->lanes[SESSION_REMOTE].evt);
+	}
+
+	hd = session->lanes[lane].hd;
 	opposite = 1 - lane;
+	
+	//Assertions
+	abort_if_fail(session->state != SESSION_CLOSED,
+			"Assertion failed");
+	abort_if_fail(session->state != SESSION_CONNECTED
+			&& session->state != SESSION_SHUTDOWN
+			? lane != SESSION_REMOTE : 1,
+			"Assertion failed");
+	abort_if_fail(session->state == SESSION_CONNECTED
+			?  session->lanes[SESSION_REMOTE].hd_valid
+			&& session->lanes[SESSION_REMOTE].hd_valid : 1,
+			"Assertion failed");
+	
 		
 	//Read data into buffer
 	if (events & EV_READ)
 	{
-		io_res = read(fd,
+		e = socket_handle_read(hd, 
 			session->lanes[lane].buffer + session->lanes[lane].end,
-			BUFFER_SIZE - session->lanes[lane].end);
+			BUFFER_SIZE - session->lanes[lane].end,
+			&io_res);
 		
 		//Error handling
-		if (io_res < 0)
+		if (e)
 		{
-			if (! IO_TEMP_ERROR(errno))
-				goto destroy;
+			if (e->type != socket_error_again)
+			{
+				shutdown_needed = 1;
+				session_log(session, 
+						"TMP: Error %s", error_desc(e));
+			}
+			error_handle(e);
+			e = NULL;
 		}
 		else if (io_res == 0)
-			goto destroy;
+		{
+			session_log(session, "TMP: io_res = 0");
+			shutdown_needed = 1;
+		}
 		else
 			session->lanes[lane].end += io_res;
 	}
@@ -203,18 +211,28 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 	//Write from opposite buffer
 	if (events & EV_WRITE)
 	{
-		io_res = write(fd,
+		e = socket_handle_write(hd, 
 			session->lanes[opposite].buffer + session->lanes[opposite].start,
-			session->lanes[opposite].end - session->lanes[opposite].start);
+			session->lanes[opposite].end - session->lanes[opposite].start,
+			&io_res);
 		
 		//Error handling
-		if (io_res < 0)
+		if (e)
 		{
-			if (! IO_TEMP_ERROR(errno))
-				goto destroy;
+			if (e->type != socket_error_again)
+			{
+				shutdown_needed = 1;
+				session_log(session, 
+						"TMP: Error %s", error_desc(e));
+			}
+			error_handle(e);
+			e = NULL;
 		}
 		else if (io_res == 0)
-			goto destroy;
+		{
+			session_log(session, "TMP: io_res = 0");
+			shutdown_needed = 1;
+		}
 		else
 			session->lanes[opposite].start += io_res;
 		
@@ -235,97 +253,126 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			session->lanes[opposite].end = new_end;
 		}
 	}
-	
-	session_prepare(session);
+
+	//Close the socket handle if anything failed
+	//If anything failed, then close socket handle and interface, if valid
+	if (shutdown_needed)
+	{
+		fprintf(stderr, "TMP: shutdown needed\n");
+		socket_handle_close(hd);
+		session->lanes[lane].hd_valid = 0;
+		if (lane == SESSION_REMOTE)
+		{
+			interface_close(session->iface);
+			session->iface = NULL;
+		}
+		if (session->state != SESSION_SHUTDOWN)
+			session_set_state(session, SESSION_SHUTDOWN);
+	}
+
+	//If session is in shutdown state and all buffers are empty, then
+	//enter closed state.
+	if (session->state == SESSION_SHUTDOWN)
+	{
+		fprintf(stderr, "TMP: shutdown state\n");
+		int cond = 0, i;
+		for(i = 0; i < 2; i++)
+		{
+			cond += session->lanes[i].hd_valid
+				? session->lanes[i].end - session->lanes[i].start
+				: 0;
+		}
+		if (!cond)
+			session_set_state(session, SESSION_CLOSED);
+	}
+
 	session_authenticator(session);
-	
-	return;
-destroy:
-	session_shutdown(session, lane);
+
+	//Call prepare function
+	session_prepare(session);
 }
 
+//Prepares events for socket handles as per buffer state
 static void session_prepare(Session *session)
 {
 	int lane;
 	
 	for (lane = 0; lane < 2; lane++)
 	{
-		int opposite = 1 - lane, events = 0;
+		int opposite = 1 - lane;
+		short events = 0;
 		
-		if (session->lanes[lane].fd < 0)
-			continue;
-		
-		if ((BUFFER_SIZE - session->lanes[lane].end) > 0)
-			events |= EV_READ;
-		
-		if ((session->lanes[opposite].end - session->lanes[opposite].start) > 0)
-			events |= EV_WRITE;
-		
-		if (session->lanes[lane].evt)
+		//Create needed flags
+		if (session->state != SESSION_CLOSED && session->lanes[lane].hd_valid)
 		{
-			event_del(session->lanes[lane].evt);
-			event_free(session->lanes[lane].evt);
-			session->lanes[lane].evt = NULL;
+			if (session->state != SESSION_SHUTDOWN)
+				if ((BUFFER_SIZE - session->lanes[lane].end) > 0)
+					events |= EV_READ;
+			
+			if ((session->lanes[opposite].end
+						- session->lanes[opposite].start) > 0)
+				events |= EV_WRITE;
 		}
-		
-		/*
-		session_log(session, "session_prepare(%d): events = (%d, %d), lane = (%d, %d), opposite = (%d, %d)",
-			lane, events & EV_READ, events & EV_WRITE,
-			session->lanes[lane].start, session->lanes[lane].end,
-			session->lanes[opposite].start, session->lanes[opposite].end);
-		
-		if ((session->lanes[lane].start > (BUFFER_SIZE / 2)) || (session->lanes[opposite].start > (BUFFER_SIZE / 2)))
+
+		struct event *evt = session->lanes[lane].evt;
+
+		//Delete event if not needed or change is needed
+		if (evt && (!events || events != event_get_events(evt)))
 		{
-			session_log(session, "Assertion failure");
-			abort();
+			event_del(evt);
+			event_free(evt);
+			evt = NULL;
 		}
-		*/
+
+		//Create a new event if needed
+		if (events && !evt)
+		{
+			evt = socket_handle_create_event(session->lanes[lane].hd,
+					events | EV_PERSIST, session_check, session);
+			event_add(evt, NULL);
+		}
+
+		session->lanes[lane].evt = evt;
+	}
+
+	//TMP: Debugging code
+	{
+		int i; 
+
+		for (i = 0; i < 2; i++)
+		{
+			fprintf(stderr, "TMP: session->lanes[%d].hd_valid = %d\n",
+					i, session->lanes[i].hd_valid);
+		}
+	}
+
+	//Assertion
+	abort_if_fail(session->lanes[SESSION_CLIENT].evt
+			|| session->lanes[SESSION_REMOTE].evt
+			|| session->connector
+			? session->state != SESSION_CLOSED
+			: session->state == SESSION_CLOSED,
+			"Assertion failure (session entered dead state)");
+
+	abort_if_fail(session->state == SESSION_CONNECTED 
+			? session->lanes[SESSION_CLIENT].evt
+				&& session->lanes[SESSION_REMOTE].evt
+			: 1,
+			"Assertion failure (session entered semidead state)");
+
+	//Call callbacks
+	if (session->state != session->prev_state)
+	{
+		session->prev_state = session->state;
 		
-		session->lanes[lane].evt = event_new
-			(evbase, session->lanes[lane].fd, events, 
-			session_check, session);
-		event_add(session->lanes[lane].evt, NULL);
+		if (session->cb)
+			(* session->cb)(session, session->state, session->cb_data);
 	}
 }
 
-//Add a session
-void session_create(int fd)
-{
-	Session *session;
-	int i;
-	
-	session = (Session *) fs_malloc(sizeof(Session));
-	
-	//Initialize lanes
-	for (i = 0; i < 2; i++)
-	{
-		session->lanes[i].fd = -1;
-		session->lanes[i].start = session->lanes[i].end = 0;
-		session->lanes[i].evt = NULL;
-	}
-	
-	session->lanes[SESSION_CLIENT].fd = fd;
-	
-	//Initialize others
-	session->state = SESSION_AUTH;
-	session->sid = fd;
-	session->iface = NULL;
-	session->connector = NULL;
-	session->dns_connector = NULL;
-	
-	//Make fd nonbocking
-	fd_set_blocking(fd, 0);
-	
-	//Prepare
-	session_prepare(session);
-	
-	session_log(session, "Created");
-}
 
 //Protocol handling code here
-
-static void session_write_socks_error
-	(Session *session, int socks_errcode)
+static void session_write_socks_error_base(Session *session, int socks_errcode)
 {
 	uint8_t *buffer;
 	
@@ -340,9 +387,27 @@ static void session_write_socks_error
 	buffer[7] = 0;
 	buffer[8] = 0;
 	buffer[9] = 0;
+}
+
+//This function calls user callback, so beware of reentrancy issues.
+static void session_write_socks_error(Session *session, int socks_errcode)
+{
+	session_write_socks_error_base(session, socks_errcode);
 	session_log(session, 
 		"SOCKS error code %s sent", socks_reply_to_str(socks_errcode));
-	session_close(session);
+	session_set_state(session, SESSION_SHUTDOWN);
+}
+
+//This function calls user callback, so beware of reentrancy issues.
+static void session_write_connect_error(Session *session, const Error *e)
+{
+	int socks_errcode = socks_reply_from_error(e);
+	session_write_socks_error_base(session, socks_errcode);
+	session_log(session, 
+		"SOCKS error code %s sent because of error: %s",
+		socks_reply_to_str(socks_errcode),
+		error_desc(e));
+	session_set_state(session, SESSION_SHUTDOWN);
 }
 
 void session_connect_cb(ConnectRes res, void *data)
@@ -350,67 +415,78 @@ void session_connect_cb(ConnectRes res, void *data)
 	Session *session = (Session *) data;
 	uint8_t *buffer;
 	int reply_size;
-	Sockaddr saddr;
-	
+	SocketAddress addr;
+	char addr_tostring[ADDRESS_MAX_LEN];
+	const Error *e;
 	
 	//Remove connector, no longer needed
+	connector_destroy(session->connector);
 	session->connector = NULL;
-	session->dns_connector = NULL;
 	
 	//Handle errors
-	if (res.socks_status != 0)
+	if (res.e)
 	{
-		session_write_socks_error(session, res.socks_status);
-		return;
-	}
-	
-	//Read address bound
-	sockaddr_getsockname(&saddr, res.fd);
-	
-	//Log message
-	session_note(session);
-	printf("Connection established, bound address: ");
-	sockaddr_write(&saddr, stdout);
-	printf("\n");
-	
-	//Add reply
-	if (saddr.x.x.sa_family == AF_INET)
-	{
-		reply_size = 10;
+		session_write_connect_error(session, res.e);
+		error_handle(res.e);
 	}
 	else
 	{
-		reply_size = 22;
+
+		//Read address bound
+		e = socket_handle_getsockname(res.hd, &addr);
+		if (e)
+		{
+			abort_with_error("socket_handle_getsockname(): %s",
+					error_desc(e));
+		}
+		
+		//Log message
+		socket_address_to_str(addr, addr_tostring);
+		session_log(session,
+				"Connection established, bound address: %s", addr_tostring);
+		
+		//Add reply
+		if (addr.host.type == NETWORK_INET)
+		{
+			reply_size = 10;
+		}
+		else
+		{
+			reply_size = 22;
+		}
+		
+		buffer = session_write_alloc(session, reply_size);
+		buffer[0] = 5;
+		buffer[1] = 0;
+		buffer[2] = 0;
+		if (addr.host.type == NETWORK_INET)
+		{
+			buffer[3] = 1;
+			memcpy(buffer + 4, addr.host.ip, 4);
+			memcpy(buffer + 8, &(addr.port), 2);
+		}
+		else
+		{
+			buffer[3] = 4;
+			memcpy(buffer + 4, addr.host.ip, 16);
+			memcpy(buffer + 20, &(addr.port), 2);
+		}
+		
+		//Setup session
+		socket_handle_set_blocking(res.hd, 0);
+		session->lanes[SESSION_REMOTE].hd = res.hd;
+		session->lanes[SESSION_REMOTE].hd_valid = 1;
+		session->iface = res.iface;
+		session_set_state(session, SESSION_CONNECTED);
+		
+		//Assertions
+		if (! session->iface)
+			abort_with_error("Assertion failure");
 	}
-	
-	buffer = session_write_alloc(session, reply_size);
-	buffer[0] = 5;
-	buffer[1] = 0;
-	buffer[2] = 0;
-	if (saddr.x.x.sa_family == AF_INET)
-	{
-		buffer[3] = 1;
-		memcpy(buffer + 4, &(saddr.x.v4.sin_addr), 4);
-		memcpy(buffer + 8, &(saddr.x.v4.sin_port), 2);
-	}
-	else
-	{
-		buffer[3] = 4;
-		memcpy(buffer + 4, &(saddr.x.v6.sin6_addr), 16);
-		memcpy(buffer + 20, &(saddr.x.v6.sin6_port), 2);
-	}
-	
-	//Setup session
-	session->lanes[SESSION_REMOTE].fd = res.fd;
-	session->iface = res.iface;
-	session->state = SESSION_CONNECTED;
-	fd_set_blocking(res.fd, 0);
 	session_prepare(session);
-	
-	//Assertions
-	if (! session->iface)
-		abort_with_error("Assertion failure");
 }
+
+//TODO: Separate SOCKS protocol details from semantics
 
 //Manages all authentication
 void session_authenticator(Session *session)
@@ -432,7 +508,7 @@ void session_authenticator(Session *session)
 		{
 			session_log(session, 
 				"Unsupported SOCKS version %d", (int) buffer[0]);
-			session_close(session);
+			session_set_state(session, SESSION_SHUTDOWN);
 			return;
 		}
 		n_methods = buffer[1];
@@ -440,7 +516,7 @@ void session_authenticator(Session *session)
 		if (! buffer)
 			return;
 		
-		//Select method only
+		//Select method 0 only
 		for (i = 0; i < n_methods; i++)
 		{
 			if (buffer[2 + i] == 0)
@@ -457,12 +533,12 @@ void session_authenticator(Session *session)
 	
 		if (selected == 0xff)
 		{
-			session_close(session);
+			session_set_state(session, SESSION_SHUTDOWN);
 			return;
 		}
 		
 		session_read(session, 2 + n_methods);
-		session->state = SESSION_REQUEST;
+		session_set_state(session, SESSION_REQUEST);
 		session_log(session, "Authenticated");
 	}
 	
@@ -475,10 +551,11 @@ void session_authenticator(Session *session)
 		if (! buffer)
 			return;
 		
+		//Verify protocol version and command
 		if (buffer[0] != 5 || buffer[2] != 0)
-			socks_errcode = 1;
-		else if (buffer[1] != 1)
-			socks_errcode = 7;
+			socks_errcode = SOCKS_REPLY_GEN;
+		else if (buffer[1] != SOCKS_CMD_CONNECT)
+			socks_errcode = SOCKS_REPLY_CMD;
 		
 		if (socks_errcode)
 		{
@@ -516,28 +593,28 @@ void session_authenticator(Session *session)
 				domain, port);
 			
 			//Connect
-			session->dns_connector = dns_connector_connect
+			session->connector = connector_connect_dns
 				(domain, port, session_connect_cb, session);
+				
 		}
 		else if (buffer[3] == 1)
 		{
 			//IPv4 address
-			Sockaddr addr;
-			
+			SocketAddress addr;
+			char addr_tostring[ADDRESS_MAX_LEN];
+
 			buffer = session_read(session, 4 + 4 + 2);
 			if (! buffer)
 				return;
-			
-			memset(&(addr), 0, sizeof(addr));
-			addr.x.v4.sin_family = AF_INET;
-			memcpy(&(addr.x.v4.sin_addr), buffer + 4, 4);
-			memcpy(&(addr.x.v4.sin_port), buffer + 8, 2);
-			addr.len = sizeof(struct sockaddr_in);
-			
-			session_note(session);
-			printf("Received request to connect to ipv4 address ");
-			sockaddr_write(&addr, stdout);
-			printf("\n");
+
+			addr.host.type = NETWORK_INET;
+			memcpy(addr.host.ip, buffer + 4, 4);
+			memcpy(&(addr.port), buffer + 8, 2);
+
+			socket_address_to_str(addr, addr_tostring);
+			session_log(session,
+					"Received request to connect to ipv4 address %s",
+					addr_tostring);
 			
 			//Connect
 			session->connector = connector_connect
@@ -546,22 +623,21 @@ void session_authenticator(Session *session)
 		else if (buffer[3] == 4)
 		{
 			//IPv6 address
-			Sockaddr addr;
+			SocketAddress addr;
+			char addr_tostring[ADDRESS_MAX_LEN];
 			
 			buffer = session_read(session, 4 + 16 + 2);
 			if (! buffer)
 				return;
 			
-			memset(&(addr), 0, sizeof(addr));
-			addr.x.v6.sin6_family = AF_INET6;
-			memcpy(&(addr.x.v6.sin6_addr), buffer + 4, 16);
-			memcpy(&(addr.x.v6.sin6_port), buffer + 20, 2);
-			addr.len = sizeof(struct sockaddr_in);
+			addr.host.type = NETWORK_INET6;
+			memcpy(addr.host.ip, buffer + 4, 16);
+			memcpy(&(addr.port), buffer + 20, 2);
 			
-			session_note(session);
-			printf("Received request to connect to ipv6 address ");
-			sockaddr_write(&addr, stdout);
-			printf("\n");
+			socket_address_to_str(addr, addr_tostring);
+			session_log(session,
+					"Received request to connect to ipv6 address %s",
+					addr_tostring);
 			
 			//Connect
 			session->connector = connector_connect
@@ -569,16 +645,106 @@ void session_authenticator(Session *session)
 		}
 		else
 		{
-			session_write_socks_error(session, 8);
+			session_write_socks_error(session, SOCKS_REPLY_ATYPE);
 			return;
 		}
 		
-		session->state = SESSION_CONNECTING;
+		session_set_state(session, SESSION_CONNECTING);
 	}
 	
 	
 }
 
+static unsigned int session_counter = 0;
 
+//Create a session
+Session *session_create(SocketHandle hd)
+{
+	Session *session;
+	int i;
+	
+	session = (Session *) fs_malloc(sizeof(Session));
+	
+	//Initialize lanes
+	for (i = 0; i < 2; i++)
+	{
+		session->lanes[i].hd_valid = 0;
+		session->lanes[i].start = session->lanes[i].end = 0;
+		session->lanes[i].evt = NULL;
+	}
+	
+	session->lanes[SESSION_CLIENT].hd = hd;
+	session->lanes[SESSION_CLIENT].hd_valid = 1;
 
+	
+	//Initialize others
+	//TODO: session ID
+	session->sid = session_counter++;
+	session->iface = NULL;
+	session->connector = NULL;
+	session->cb = NULL;
+	session->cb_data = NULL;
+	session->prev_state = SESSION_CLOSED;
+	session->state = SESSION_CLOSED;
+	
+	//Make fd nonbocking
+	socket_handle_set_blocking(hd, 0);
+	
+	//Log message
+	session_log(session, "Created");
+
+	//Start session
+	session_set_state(session, SESSION_AUTH);	
+	session_prepare(session);
+
+	return session;
+}
+
+//Gets current state
+SessionState session_get_state(Session *session)
+{
+	return session->state;
+}
+
+//Shuts down session by trying to send all unsent data
+void session_shutdown(Session *session)
+{
+	abort_if_fail(session->state != SESSION_SHUTDOWN
+			&& session->state != SESSION_CLOSED,
+			"Session already shutting down");
+	
+	session_log(session, "Closed");
+
+	if (session->connector)
+		connector_destroy(session->connector);
+
+	session_set_state(session, SESSION_SHUTDOWN);	
+}
+
+void session_destroy(Session *session)
+{
+	int i;
+
+	for (i = 0; i < 2; i++)
+	{
+		if (session->lanes[i].hd_valid)
+			socket_handle_close(session->lanes[i].hd);
+		if (session->lanes[i].evt)
+			event_free(session->lanes[i].evt);
+	}
+
+	if (session->iface)
+		interface_close(session->iface);
+	if (session->connector)
+		connector_destroy(session->connector);
+
+	free(session);
+}
+
+void session_set_callback
+	(Session *session, SessionStateChangeCB cb, void *data)
+{
+	session->cb = cb;
+	session->cb_data = data;
+}
 

@@ -23,21 +23,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 #include <string.h>
-#include <errno.h>
 
 #include <event2/event.h>
 #include <event2/dns.h>
 
 #include "utils.h"
-#include "address.h"
+#include "network.h"
 #include "balancer.h"
 #include "socks.h"
 #include "connector.h"
-#include "flush.h"
 #include "session.h"
 #include "server.h"

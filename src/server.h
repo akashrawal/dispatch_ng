@@ -19,6 +19,6 @@
  */
 
 
-void server_create(const char *str);
+void server_create(const char *str, int n_connections);
 
 

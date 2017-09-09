@@ -41,3 +41,20 @@ const char *socks_reply_to_str(int code)
 	
 	return socks_error_strings[code];
 }
+
+//TODO: Add newly added error strings
+int socks_reply_from_error(const Error *e)
+{
+	if (!e)
+		return SOCKS_REPLY_SUCCESS;
+	else if (e->type == socket_error_timeout)
+		return SOCKS_REPLY_TTLEXPIRED;
+	else if (e->type == socket_error_network_unreachable)
+		return SOCKS_REPLY_NETUNREACH;
+	else if (e->type == socket_error_host_unreachable)
+		return SOCKS_REPLY_HOSTUNREACH;
+	else if (e->type == socket_error_connection_refused)
+		return SOCKS_REPLY_CONNREFUSED;
+	else
+		return SOCKS_REPLY_GEN;
+}

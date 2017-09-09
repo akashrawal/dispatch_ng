@@ -20,73 +20,75 @@
 
 #include "incl.h"
 
-int interface_open(Interface *iface)
-{
-	int fd = address_open_iface(&(iface->addr));
-	
-	if (fd >= 0)
-		iface->use_count++;
-		
-	return fd;
-}
-
 void interface_close(Interface *iface)
 {
 	iface->use_count--;
 }
 
-
 static Interface *ifaces = NULL;
+NetworkType types;
 
-Interface *balancer_add_from_string(const char *str)
+Interface *balancer_add(HostAddress addr, int metric)
 {
 	Interface *iface;
-	
+
 	iface = (Interface *) fs_malloc(sizeof(Interface));
 	
-	address_read(&(iface->addr), str, &(iface->metric), METRIC); 
+	iface->addr = addr;
+	iface->metric = metric;
 	if (iface->metric < 0)
 		iface->metric = 1;
 	iface->use_count = 0;
 	
 	iface->next = ifaces;
 	ifaces = iface;
+	types |= addr.type;
 	
 	return iface;
 }
 
-void balancer_verify()
+Interface *balancer_add_from_string(const char *addr_with_metric)
 {
-	Interface *iter;
-	int fail_count = 0;
-	
-	for (iter = ifaces; iter; iter = iter->next)
+	char *addr_str, *metric_str;
+	HostAddress addr;
+	int metric;
+	Status s;
+
+	addr_str = split_string(addr_with_metric, '@', &metric_str);
+
+	if (addr_str)
 	{
-		int fd;
-		
-		printf("Testing ");
-		address_write(&(iter->addr), stdout);
-		printf("@%d...\n",  iter->metric);
-		
-		fd = address_open_iface(&(iter->addr));
-		if (fd >= 0)
-			close(fd);
-		else fail_count++;
+		s = host_address_from_str(addr_str, &addr);	
+		//TODO: Detect errors here
+		metric = atoi(metric_str);
 	}
-	
-	if (fail_count)
-		abort_with_error("%d interfaces are not working, "
-			"check your network settings and addresses. \n");
+	else
+	{
+		s = host_address_from_str(addr_with_metric, &addr);	
+		metric = -1;
+	}
+
+	abort_if_fail(s == STATUS_SUCCESS,
+			"Failed to parse address %s", addr_with_metric);
+
+	return balancer_add(addr, metric);
 }
 
-Interface *balancer_select(int addr_mask)
+const char balancer_error_no_iface[] = "No suitable interface available";
+static const Error error_struct_no_iface[] = {{balancer_error_no_iface, NULL}};
+
+const Error *balancer_open_iface(NetworkType types,
+		Interface **iface_out, SocketHandle *hd_out)
 {
 	Interface *iter, *selected = NULL;
 	double iter_cost, selected_cost;
+	SocketHandle hd;
+	const Error *e;
 	
+	//TODO: Improve algorithm for O(log(n)) time complexity
 	for (iter = ifaces; iter; iter = iter->next)
 	{
-		if (! (iter->addr.type & addr_mask))
+		if (! (iter->addr.type & types))
 			continue;
 		
 		iter_cost = (double) iter->use_count / (double) iter->metric;
@@ -105,6 +107,27 @@ Interface *balancer_select(int addr_mask)
 			selected_cost = iter_cost;
 		}
 	}
-	
-	return selected;
+
+
+	if (! selected)
+		return error_struct_no_iface;
+
+	{
+		SocketAddress addr;
+		addr.host = selected->addr;
+		addr.port = 0;
+		e = socket_handle_create_bound(addr, &hd);
+	}
+	if (e)
+		return e;
+
+	selected->use_count++;
+	*iface_out = selected;
+	*hd_out = hd;
+	return NULL;
+}
+
+NetworkType balancer_get_available_types()
+{
+	return types;
 }

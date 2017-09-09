@@ -23,37 +23,69 @@
 
 typedef struct
 {
-	int fd;
+	int n_connections;
+	SocketHandle hd;
 	struct event *evt;
 } Server;
 
-void server_check(evutil_socket_t fd, short events, void *data)
+static void session_state_change_cb
+		(Session *session, SessionState state, void *data)
 {
-	int client_fd;
-	
-	client_fd = accept(fd, NULL, NULL);
-	if (client_fd < 0)
-		abort_with_liberror("accept()");
-	
-	session_create(client_fd);
+	Server *server = (Server *) data;
+
+	if (state == SESSION_CLOSED)
+	{
+		session_destroy(session);
+
+		if (server->n_connections > 0)
+		{
+			server->n_connections--;
+			if (server->n_connections <= 0)
+			{
+				event_base_loopbreak(evbase);
+			}
+		}
+	}
 }
 
-void server_create(const char *str)
+void server_check(evutil_socket_t fd, short events, void *data)
+{
+	Server *server = (Server *) data;
+
+	SocketHandle client_hd;
+	Session *session;
+	const Error *e;
+	
+	e = socket_handle_accept(server->hd, &client_hd);
+	if (e)
+		abort_with_error("Failed to accept new connection: %s",
+				error_desc(e));
+	
+	session = session_create(client_hd);
+	session_set_callback(session, session_state_change_cb, server);
+}
+
+void server_create(const char *str, int n_connections)
 {
 	Server *server;
-	Address addr;
-	int port;
+	SocketAddress addr;
+	const Error *e;
 	
 	server = (Server *) fs_malloc(sizeof(Server));
+	server->n_connections = n_connections;
+	abort_if_fail(n_connections != 0, "Assertion failure");
 	
-	address_read(&addr, str, &port, PORT);
-	if (port <= 0)
-		port = 1080;
-	server->fd = address_open_svr(&addr, port);
-	
-	fd_set_blocking(server->fd, 0);
-	server->evt = event_new(evbase, server->fd, EV_READ | EV_PERSIST, 
-		server_check, server);
+ 	abort_if_fail (socket_address_from_str(str, &addr) == STATUS_SUCCESS,
+			"Failed to read binding address");
+	if(addr.port == 0)
+		addr.port = htons(1080);
+	e = socket_handle_create_listener(addr, &(server->hd));
+	if (e)
+		abort_with_error("Failed to create listener socket: %s", 
+				error_desc(e));
+	socket_handle_set_blocking(server->hd, 0);
+	server->evt = socket_handle_create_event
+		(server->hd, EV_READ | EV_PERSIST, server_check, server);
 	event_add(server->evt, NULL);
 	
 	printf("Listening at %s\n", str);

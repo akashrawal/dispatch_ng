@@ -9,6 +9,8 @@ AM_SILENT_RULES([yes])
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_RANLIB
+AM_PROG_AR
 
 # Checks for libraries.
 AC_CHECK_LIB([event], [event_base_new], [], [AC_MSG_ERROR(["could not find required library libevent"])])
@@ -22,5 +24,6 @@ AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h string.h sys/socket.h
 AC_CHECK_FUNCS([socket strerror])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile
+				 tests/Makefile])
 AC_OUTPUT

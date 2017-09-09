@@ -18,49 +18,31 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+//Error messaages
+extern const char connector_error_dns_fail[];
 
 typedef struct 
 {
-	int socks_status;
-	int fd;
+	const Error *e;
+	SocketHandle hd;
 	Interface *iface;
 } ConnectRes;
 
+//Prototype for the callback function
 typedef void (*ConnectorCB)(ConnectRes res, void *data);
 
-typedef struct 
-{
-	int fd;
-	Interface *iface;
-	struct event *evt;
-	
-	ConnectorCB cb;
-	void *data;
-} Connector;
+//The connector
+typedef struct _Connector Connector;
 
+//Connect to a remote socket
 Connector *connector_connect
-	(Sockaddr saddr, ConnectorCB cb, void *data);
+	(SocketAddress addr, ConnectorCB cb, void *data);
+
+//Connect by resolving name by DNS
+Connector *connector_connect_dns
+	(const char *name, uint16_t port, ConnectorCB cb, void *data);
 	
-void connector_cancel(Connector *connector);
-
-
-extern struct evdns_base *dns_base;
-
-typedef struct 
-{
-	struct evdns_getaddrinfo_request *dns_query;
-	struct evutil_addrinfo *addrs;
-	struct evutil_addrinfo *addrs_iter;
-	Connector *connector;
-	
-	ConnectorCB cb;
-	void *data;
-} DnsConnector;
-
-DnsConnector *dns_connector_connect
-	(const char *name, int port, ConnectorCB cb, void *data);
-
-void dns_connector_cancel(DnsConnector *dc);
-
-void connector_init();
+//Destroys connector object.
+//Connection, if in progress, is cancelled and no callback is called.
+void connector_destroy(Connector *connector);
 

@@ -21,6 +21,8 @@
 #include "incl.h"
 #include <signal.h>
 
+//TODO: Unit test framework
+
 int main(int argc, char *argv[])
 {
 	int i, len;
@@ -32,7 +34,6 @@ int main(int argc, char *argv[])
 	
 	//Call init functions
 	utils_init();
-	connector_init();
 	
 	//Read arguments
 	len = strlen("--bind=");
@@ -47,7 +48,7 @@ int main(int argc, char *argv[])
 		}
 		else if (strncmp(argv[i], "--bind=", len) == 0)
 		{
-			server_create(argv[i] + len);
+			server_create(argv[i] + len, -1);
 			bound = 1;
 		}
 		else
@@ -65,12 +66,9 @@ int main(int argc, char *argv[])
 	//Default listening addresses
 	if (! bound)
 	{
-		server_create("127.0.0.1:1080");
-		server_create("[::1]:1080");
+		server_create("127.0.0.1:1080", -1);
+		server_create("[::1]:1080", -1);
 	}
-	
-	//Test dispatch addresses
-	balancer_verify();
 	
 	//Start dispatch
 	printf("Running...\n");

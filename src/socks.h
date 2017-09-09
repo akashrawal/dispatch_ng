@@ -18,8 +18,7 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-//TODO: Decide whether to support all?
-
+//TODO: Decide whether to support all? (low priority)
 typedef enum
 {
 	SOCKS_AUTH_NONE = 0, //< Only one that is supported
@@ -30,7 +29,7 @@ typedef enum
 
 typedef enum
 {
-	SOCKS_CMD_CONNECT = 1,
+	SOCKS_CMD_CONNECT = 1, //< Only one that works
 	SOCKS_CMD_BIND = 2,
 	SOCKS_CMD_UDP_ASSOCIATE = 3
 } SocksRequestCommand;
@@ -56,3 +55,5 @@ typedef enum
 } SocksReplyCode;
 
 const char *socks_reply_to_str(int code);
+
+int socks_reply_from_error(const Error *e);
