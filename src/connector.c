@@ -116,8 +116,6 @@ static void conn_connect_cb(evutil_socket_t fd, short events, void *data)
 
 	if (res.e)
 	{
-		//Connecton failed, handle error
-		fprintf(stderr, "TMP: socket handle error %s\n", error_desc(res.e));
 		conn_set_last_error(connector, res.e);
 
 		//Close socket
@@ -193,8 +191,6 @@ static void conn_start(Connector *connector)
 			else
 			{
 				//Fail, try next address
-				fprintf(stderr, "TMP: socket handle error %s\n",
-						error_desc(e));
 				conn_set_last_error(connector, e);
 				interface_close(connector->iface);
 				connector->iface = NULL;
@@ -229,9 +225,6 @@ static void conn_start(Connector *connector)
 
 		connector_return(connector, res);
 	}
-
-	fprintf(stderr, "TMP: connector->iface = %p\n", connector->iface);
-	fprintf(stderr, "TMP: connector->event = %p\n", connector->event);
 
 	abort_if_fail((connector->iface ? 1 : 0) == (connector->event ? 1 : 0),
 			"Assertion failure");

@@ -153,16 +153,6 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			break;
 	}
 
-	if (session->state == SESSION_CLOSED)
-	{
-		session_log(session, "TMP: events = %d", (int) events);
-		session_log(session, "TMP: fd = %d", (int) fd);
-		session_log(session, "TMP: client lane = %p",
-				session->lanes[SESSION_CLIENT].evt);
-		session_log(session, "TMP: remote lane = %p",
-				session->lanes[SESSION_REMOTE].evt);
-	}
-
 	hd = session->lanes[lane].hd;
 	opposite = 1 - lane;
 	
@@ -194,14 +184,14 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			{
 				shutdown_needed = 1;
 				session_log(session, 
-						"TMP: Error %s", error_desc(e));
+						"Error %s", error_desc(e));
 			}
 			error_handle(e);
 			e = NULL;
 		}
 		else if (io_res == 0)
 		{
-			session_log(session, "TMP: io_res = 0");
+			session_log(session, "EOF encountered");
 			shutdown_needed = 1;
 		}
 		else
@@ -215,6 +205,8 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			session->lanes[opposite].buffer + session->lanes[opposite].start,
 			session->lanes[opposite].end - session->lanes[opposite].start,
 			&io_res);
+
+		abort_if_fail(io_res != 0, "Assertion failure");
 		
 		//Error handling
 		if (e)
@@ -223,15 +215,10 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			{
 				shutdown_needed = 1;
 				session_log(session, 
-						"TMP: Error %s", error_desc(e));
+						"Error %s", error_desc(e));
 			}
 			error_handle(e);
 			e = NULL;
-		}
-		else if (io_res == 0)
-		{
-			session_log(session, "TMP: io_res = 0");
-			shutdown_needed = 1;
 		}
 		else
 			session->lanes[opposite].start += io_res;
@@ -258,7 +245,6 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 	//If anything failed, then close socket handle and interface, if valid
 	if (shutdown_needed)
 	{
-		fprintf(stderr, "TMP: shutdown needed\n");
 		socket_handle_close(hd);
 		session->lanes[lane].hd_valid = 0;
 		if (lane == SESSION_REMOTE)
@@ -274,7 +260,6 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 	//enter closed state.
 	if (session->state == SESSION_SHUTDOWN)
 	{
-		fprintf(stderr, "TMP: shutdown state\n");
 		int cond = 0, i;
 		for(i = 0; i < 2; i++)
 		{
@@ -335,17 +320,6 @@ static void session_prepare(Session *session)
 		session->lanes[lane].evt = evt;
 	}
 
-	//TMP: Debugging code
-	{
-		int i; 
-
-		for (i = 0; i < 2; i++)
-		{
-			fprintf(stderr, "TMP: session->lanes[%d].hd_valid = %d\n",
-					i, session->lanes[i].hd_valid);
-		}
-	}
-
 	//Assertion
 	abort_if_fail(session->lanes[SESSION_CLIENT].evt
 			|| session->lanes[SESSION_REMOTE].evt
@@ -356,7 +330,7 @@ static void session_prepare(Session *session)
 
 	abort_if_fail(session->state == SESSION_CONNECTED 
 			? session->lanes[SESSION_CLIENT].evt
-				&& session->lanes[SESSION_REMOTE].evt
+				|| session->lanes[SESSION_REMOTE].evt
 			: 1,
 			"Assertion failure (session entered semidead state)");
 
