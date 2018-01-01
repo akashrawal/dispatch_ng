@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 		}
 		else if (strncmp(argv[i], "--bind=", len) == 0)
 		{
-			server_create(argv[i] + len, -1);
+			server_create(argv[i] + len);
 			bound = 1;
 		}
 		else
@@ -66,8 +66,8 @@ int main(int argc, char *argv[])
 	//Default listening addresses
 	if (! bound)
 	{
-		server_create("127.0.0.1:1080", -1);
-		server_create("[::1]:1080", -1);
+		server_create("127.0.0.1:1080");
+		server_create("[::1]:1080");
 	}
 	
 	//Start dispatch

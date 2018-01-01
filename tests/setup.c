@@ -44,6 +44,7 @@ int main()
 	actor_destroy(client);
 
 	script_free(script);
+	utils_shutdown();
 
 	return 0;
 }

@@ -21,12 +21,13 @@
 #include "incl.h"
 
 
-typedef struct
+struct _Server
 {
-	int n_connections;
 	SocketHandle hd;
 	struct event *evt;
-} Server;
+	ServerEventCB cb;
+	void *cb_data;
+};
 
 static void session_state_change_cb
 		(Session *session, SessionState state, void *data)
@@ -37,15 +38,10 @@ static void session_state_change_cb
 	{
 		session_destroy(session);
 
-		if (server->n_connections > 0)
-		{
-			server->n_connections--;
-			if (server->n_connections <= 0)
-			{
-				event_base_loopbreak(evbase);
-			}
-		}
+		if (server->cb)
+			(* server->cb)(server, SERVER_SESSION_CLOSE, server->cb_data);
 	}
+
 }
 
 void server_check(evutil_socket_t fd, short events, void *data)
@@ -63,17 +59,17 @@ void server_check(evutil_socket_t fd, short events, void *data)
 	
 	session = session_create(client_hd);
 	session_set_callback(session, session_state_change_cb, server);
+	if (server->cb)
+		(* server->cb)(server, SERVER_SESSION_OPEN, server->cb_data);
 }
 
-void server_create(const char *str, int n_connections)
+Server *server_create(const char *str)
 {
 	Server *server;
 	SocketAddress addr;
 	const Error *e;
 	
 	server = (Server *) fs_malloc(sizeof(Server));
-	server->n_connections = n_connections;
-	abort_if_fail(n_connections != 0, "Assertion failure");
 	
  	abort_if_fail (socket_address_from_str(str, &addr) == STATUS_SUCCESS,
 			"Failed to read binding address");
@@ -87,6 +83,25 @@ void server_create(const char *str, int n_connections)
 	server->evt = socket_handle_create_event
 		(server->hd, EV_READ | EV_PERSIST, server_check, server);
 	event_add(server->evt, NULL);
+
+	server->cb = NULL;
+	server->cb_data = NULL;
 	
 	printf("Listening at %s\n", str);
+
+	return server;
+}
+
+void server_destroy(Server *server)
+{
+	event_del(server->evt);
+	event_free(server->evt);
+	socket_handle_close(server->hd);
+	free(server);
+}
+
+void server_set_cb(Server *server, ServerEventCB cb, void *cb_data)
+{
+	server->cb = cb;
+	server->cb_data = cb_data;
 }

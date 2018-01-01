@@ -192,3 +192,10 @@ void utils_init()
 	evbase = event_base_new();
 	evdns_base = evdns_base_new(evbase, 1);
 }
+
+void utils_shutdown()
+{
+	evdns_base_free(evdns_base, 0);
+	event_base_free(evbase);
+}
+

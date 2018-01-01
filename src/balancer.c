@@ -131,3 +131,16 @@ NetworkType balancer_get_available_types()
 {
 	return types;
 }
+
+void balancer_shutdown()
+{
+	Interface *iter, *next;
+
+	for (iter = ifaces; iter; iter = next)
+	{
+		next = iter->next;
+
+		free(iter);
+	}
+	ifaces = NULL;
+}

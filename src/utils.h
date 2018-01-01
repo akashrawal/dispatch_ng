@@ -131,3 +131,4 @@ extern struct event_base *evbase;
 extern struct evdns_base *evdns_base;
 
 void utils_init();
+void utils_shutdown();

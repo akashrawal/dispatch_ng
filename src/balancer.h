@@ -44,4 +44,4 @@ const Error *balancer_open_iface(NetworkType types,
 
 NetworkType balancer_get_available_types();
 
-
+void balancer_shutdown();
