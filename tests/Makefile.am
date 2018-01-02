@@ -1,5 +1,5 @@
 
-common_cflags = $(DISPATCH_NG_CFLAGS) -I$(top_srcdir) -DTESTDATA=$(srcdir)/data
+common_cflags = $(DISPATCH_NG_CFLAGS) -I$(top_srcdir)
 common_libadd = $(DISPATCH_NG_LIBS) ../src/libdispatch.a
 
 
@@ -16,7 +16,7 @@ check_PROGRAMS = \
 
 TESTS = $(check_PROGRAMS)
 AM_CFLAGS = $(common_cflags)
-LDADD = $(common_libadd) libtest.a
+LDADD = libtest.a $(common_libadd)
 
 EXTRA_DIST = valgrind-suppressions
 

@@ -25,14 +25,4 @@ Server *server_create(const char *str);
 
 void server_destroy(Server *server);
 
-typedef enum
-{
-	SERVER_SESSION_OPEN = 0,
-	SERVER_SESSION_CLOSE = 1
-} ServerEvent;
-
-typedef void (*ServerEventCB)(Server *server, ServerEvent event, void *data);
-
-void server_set_cb(Server *server, ServerEventCB cb, void *cb_data);
-
-
+Server *server_create_test(SocketHandle hd);

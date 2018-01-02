@@ -130,5 +130,9 @@ static inline const char *error_handle(const Error *e)
 extern struct event_base *evbase;
 extern struct evdns_base *evdns_base;
 
+void evloop_hold();
+void evloop_release();
+
+//Initializer and finalizer
 void utils_init();
 void utils_shutdown();

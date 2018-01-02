@@ -73,20 +73,18 @@ typedef struct
 
 void set_variable_loc(char id, void *data, size_t len);
 
-ScriptElement *script_build(char *src);
+ScriptElement *script_build(const char *src);
 
 void script_free(ScriptElement *script);
 
-//Callback
+//Actor
 typedef struct _Actor Actor;
-typedef void (*ActorFinishCB)(Actor *p, void *data);
-
 
 void actor_destroy(Actor *p);
 
-Actor *actor_create_server(SocketAddress addr, ScriptElement *script);
+Actor *actor_create_server(SocketHandle hd, ScriptElement *script);
 
 Actor *actor_create_client(SocketAddress addr, ScriptElement *script);
 
-void actor_set_callback(Actor *p, ActorFinishCB cb, void *cb_data);
-
+void test_open_listener
+	(const char *host, SocketHandle *hd_out, SocketAddress *addr_out);

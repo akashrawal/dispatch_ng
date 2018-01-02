@@ -48,7 +48,7 @@ static int get_hex_digit(char c)
 		return -1;
 }
 
-ScriptElement *script_build(char *src)
+ScriptElement *script_build(const char *src)
 {
 	ScriptElement *script;
 	int n_dialogs;
@@ -157,9 +157,6 @@ struct _Actor
 	 * else
 	 *     read(p->script[p->dialog]);
 	 */
-
-	ActorFinishCB cb;
-	void *cb_data;
 };
 
 #define ACTOR_SERVER_MODE -1
@@ -301,11 +298,10 @@ static void actor_prepare(Actor *p)
 	{
 		flags = EV_READ;
 	}
-	//If we have finished the script then call the callback and exit the loop
+	//If we have finished the script then release the event loop
 	else if (! p->script[p->dialog].data)
 	{
-		if (p->cb)
-			(* p->cb) (p, p->cb_data);
+		evloop_release();
 		socket_handle_close(p->hd);
 		return;
 	}
@@ -344,20 +340,15 @@ static Actor *actor_create(SocketHandle hd, ScriptElement *script, int is_odd_sp
 	p->pos = 0;
 	p->event = NULL;
 	p->is_odd_sprite = is_odd_sprite;
-
-	p->cb = NULL;
-	p->cb_data = NULL;
+	
+	evloop_hold();
 
 	return p;
 }
 
-Actor *actor_create_server(SocketAddress addr, ScriptElement *script)
+Actor *actor_create_server(SocketHandle hd, ScriptElement *script)
 {
-	SocketHandle hd;
 	Actor *p;
-	
-	abort_on_error(socket_handle_create_listener(addr, &hd));
-	abort_on_error(socket_handle_set_blocking(hd, 0));
 
 	p = actor_create(hd, script, 1);	
 	p->dialog = ACTOR_SERVER_MODE;
@@ -393,8 +384,21 @@ Actor *actor_create_client(SocketAddress addr, ScriptElement *script)
 	return p;
 }
 
-void actor_set_callback(Actor *p, ActorFinishCB cb, void *cb_data)
+void test_open_listener
+	(const char *host, SocketHandle *hd_out, SocketAddress *addr_out)
 {
-	p->cb = cb;
-	p->cb_data = cb_data;
+	SocketAddress bind_addr;
+	SocketAddress addr;
+	SocketHandle hd;
+
+	abort_if_fail(host_address_from_str(host, &bind_addr.host),
+			"Incorrect host address");
+	bind_addr.port = 0;
+
+	abort_on_error(socket_handle_create_listener(bind_addr, &hd));
+	abort_on_error(socket_handle_getsockname(hd, &addr));
+
+	*hd_out = hd;
+	*addr_out = addr;
 }
+

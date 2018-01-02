@@ -182,9 +182,20 @@ const Error *error_printf(const char *type, const char *fmt, ...)
 }
 
 //Event loop
-
 struct event_base *evbase;
 struct evdns_base *evdns_base;
+int evloop_use_count = 0;
+
+void evloop_hold()
+{
+	evloop_use_count++;
+}
+void evloop_release()
+{
+	evloop_use_count--;
+	if (evloop_use_count <= 0)
+		event_base_loopbreak(evbase);
+}
 
 //Module initializer
 void utils_init()

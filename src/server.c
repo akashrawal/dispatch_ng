@@ -25,8 +25,7 @@ struct _Server
 {
 	SocketHandle hd;
 	struct event *evt;
-	ServerEventCB cb;
-	void *cb_data;
+	int test_mode;
 };
 
 static void session_state_change_cb
@@ -38,8 +37,13 @@ static void session_state_change_cb
 	{
 		session_destroy(session);
 
-		if (server->cb)
-			(* server->cb)(server, SERVER_SESSION_CLOSE, server->cb_data);
+		if (server->test_mode)
+		{
+			event_del(server->evt);
+			event_free(server->evt);
+			server->evt = NULL;
+			evloop_release();
+		}
 	}
 
 }
@@ -59,49 +63,56 @@ void server_check(evutil_socket_t fd, short events, void *data)
 	
 	session = session_create(client_hd);
 	session_set_callback(session, session_state_change_cb, server);
-	if (server->cb)
-		(* server->cb)(server, SERVER_SESSION_OPEN, server->cb_data);
+}
+
+static Server *server_create_internal(SocketHandle hd, int test_mode)
+{
+	Server *server = (Server *) fs_malloc(sizeof(Server));
+
+	server->hd = hd;
+
+	server->evt = socket_handle_create_event
+		(server->hd, EV_READ | EV_PERSIST, server_check, server);
+	event_add(server->evt, NULL);
+	evloop_hold();
+
+	server->test_mode = test_mode;
+
+	return server;
 }
 
 Server *server_create(const char *str)
 {
-	Server *server;
 	SocketAddress addr;
+	SocketHandle hd;
 	const Error *e;
-	
-	server = (Server *) fs_malloc(sizeof(Server));
 	
  	abort_if_fail (socket_address_from_str(str, &addr) == STATUS_SUCCESS,
 			"Failed to read binding address");
 	if(addr.port == 0)
 		addr.port = htons(1080);
-	e = socket_handle_create_listener(addr, &(server->hd));
-	if (e)
-		abort_with_error("Failed to create listener socket: %s", 
-				error_desc(e));
-	socket_handle_set_blocking(server->hd, 0);
-	server->evt = socket_handle_create_event
-		(server->hd, EV_READ | EV_PERSIST, server_check, server);
-	event_add(server->evt, NULL);
+	e = socket_handle_create_listener(addr, &hd);
+	abort_if_fail(!e, "Failed to create listener socket: %s", error_desc(e));
+	e = socket_handle_set_blocking(hd, 0);
+	abort_if_fail(!e, "Failed to enable nonblocking: %s", error_desc(e));
 
-	server->cb = NULL;
-	server->cb_data = NULL;
-	
 	printf("Listening at %s\n", str);
-
-	return server;
+	return server_create_internal(hd, 0);
 }
 
 void server_destroy(Server *server)
 {
-	event_del(server->evt);
-	event_free(server->evt);
+	if (server->evt)
+	{
+		event_del(server->evt);
+		event_free(server->evt);
+		evloop_release();
+	}
 	socket_handle_close(server->hd);
 	free(server);
 }
 
-void server_set_cb(Server *server, ServerEventCB cb, void *cb_data)
+Server *server_create_test(SocketHandle hd)
 {
-	server->cb = cb;
-	server->cb_data = cb_data;
+	return server_create_internal(hd, 1);
 }
