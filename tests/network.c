@@ -68,7 +68,12 @@ int main()
 {
 	test_run(test_socket_address("192.168.56.101:7080", same));
 	test_run(test_socket_address("[1:2:3:4:5:6:7:8]:7080", same));
-	//TODO: Add test for '::' feature for ipv6
+	test_run(test_socket_address("[::]:7080", same));
+	test_run(test_socket_address("[::1]:7080", same));
+	test_run(test_socket_address("[1::2]:7080", same));
+	test_run(test_socket_address("[1::2:0:3]:7080", same));
+	test_run(test_socket_address("[1:2:3:4:5:6::8]:7080", same));
+	test_run(test_socket_address("[1:2:3:4:5:6:7::]:7080", same));
 
 	test_run(test_getsockname("127.0.0.1:7080"));
 }

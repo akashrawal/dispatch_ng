@@ -212,13 +212,86 @@ void host_address_to_str(HostAddress addr, char *out)
 	else
 	{
 		//IPv6
-		//TODO: Coalescate consecutive zero uint16_t's to ::
+		const char lut[16] = "0123456789abcdef";
+		char *out_ptr = out;
 		uint16_t *pun = (uint16_t *) addr.ip;
-		snprintf(out, ADDRESS_MAX_LEN, "[%x:%x:%x:%x:%x:%x:%x:%x]",
-				(unsigned int) ntohs(pun[0]), (unsigned int) ntohs(pun[1]),
-				(unsigned int) ntohs(pun[2]), (unsigned int) ntohs(pun[3]),
-				(unsigned int) ntohs(pun[4]), (unsigned int) ntohs(pun[5]),
-				(unsigned int) ntohs(pun[6]), (unsigned int) ntohs(pun[7]));
+		int i, j;
+
+		//Find the largest sequence of zeroes.
+		int pos = -1, len = 0, maxpos = -1, maxlen = 0;
+		for (i = 0; i < 8; i++)
+		{
+			if (pun[i])
+			{
+				pos = -1;
+				len = 0;
+			}
+			else
+			{
+				if (pos == -1)
+				{
+					pos = i;
+					len = 1;
+				}
+				else
+				{
+					len++;
+				}
+
+				if (maxlen < len)
+				{
+					maxpos = pos;
+					maxlen = len;
+				}
+			}
+		}
+
+		//Now write the address
+		int colon_flag = 0;
+		*out_ptr = '[';
+		out_ptr++;
+		for (i = 0; i < 8; i++)
+		{
+			if (i == maxpos)
+			{
+				//Represent zeroes with ::
+				colon_flag = 0;
+				out_ptr[0] = out_ptr[1] = ':';
+				out_ptr += 2;
+				i += maxlen - 1;
+			}
+			else
+			{
+				//Write one 16-bit chunk
+				uint16_t part = ntohs(pun[i]);
+				int mode = 0;
+				if (colon_flag)
+				{
+					*out_ptr = ':';
+					out_ptr++;
+				}
+				else
+				{
+					colon_flag = 1;
+				}
+				for (j = 3; j >= 0; j--)
+				{
+					int digit = (part >> (j * 4)) & 0xf;
+
+					if (digit || j == 0)
+						mode = 1;
+
+					if (mode)
+					{
+						*out_ptr = lut[digit];
+						out_ptr++;
+					}
+				}
+			}
+		}
+		*out_ptr = ']';
+		out_ptr++;
+		*out_ptr = 0;
 	}
 }
 
