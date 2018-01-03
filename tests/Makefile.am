@@ -12,7 +12,8 @@ check_PROGRAMS = \
 	utils \
 	network \
 	setup \
-	test-ipv4
+	test-ipv4 \
+	test-ipv6
 
 TESTS = $(check_PROGRAMS)
 AM_CFLAGS = $(common_cflags)

@@ -179,7 +179,7 @@ Status host_address_from_str(const char *str, HostAddress *addr_out)
 			return STATUS_FAILURE;
 
 		//Do the conversion
-		res = inet_pton(AF_INET6, ip6_str, (void *) &(addr.ip));
+		res = inet_pton(AF_INET6, ip6_str, (void *) addr.ip);
 		free(ip6_str);
 		if (res != 1)
 			return STATUS_FAILURE;
@@ -188,7 +188,7 @@ Status host_address_from_str(const char *str, HostAddress *addr_out)
 	else
 	{
 		//IPv4
-		if (inet_pton(AF_INET, str, (void *) &(addr.ip)) != 1)
+		if (inet_pton(AF_INET, str, (void *) addr.ip) != 1)
 			return STATUS_FAILURE;
 		addr.type = NETWORK_INET;
 	}
@@ -324,7 +324,7 @@ const Error *socket_handle_connect(SocketHandle hd, SocketAddress addr)
 	NativeAddress native_addr;
 
 	native_addr = native_address_create
-		(addr.host.type, &addr.host.ip, addr.port);
+		(addr.host.type, addr.host.ip, addr.port);
 	
 	if (connect(hd.fd, &native_addr.data.generic, native_addr.size) < 0)
 		return error_from_errno(errno, "connect(fd = %d) failed", hd.fd);
@@ -385,7 +385,7 @@ const Error *socket_handle_getsockname
 	else if (native_addr.generic.sa_family == AF_INET6)
 	{
 		addr_out->host.type = NETWORK_INET6;
-		memcpy(addr_out->host.ip, &native_addr.ipv6.sin6_addr, 4);
+		memcpy(addr_out->host.ip, &native_addr.ipv6.sin6_addr, 16);
 		addr_out->port = native_addr.ipv6.sin6_port;
 	}
 	else
