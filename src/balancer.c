@@ -20,13 +20,142 @@
 
 #include "incl.h"
 
+//Interface data structure
+struct _Interface
+{
+	int index;
+	int metric;
+	int use_count;
+	HostAddress addr;
+};
+NetworkType types = 0;
+
+//Min-heap data structure
+typedef struct
+{
+	Interface **data;
+	size_t len, alloc_len;
+} Heap;
+
+Heap ip4[1] = {0}, ip6[1] = {0};
+
+static double value(Heap *heap, int idx)
+{
+	return ((double) heap->data[idx]->use_count / heap->data[idx]->metric);
+}
+
+static void assign(Heap *heap, int idx, Interface *value)
+{
+	heap->data[idx] = value;
+	if (value)
+		value->index = idx;
+}
+
+#if 0
+static void assert_heap(Heap *heap)
+{
+	int i, parent;
+
+	for (i = 1; i < heap->len; i++)
+	{
+		parent = (i - 1) / 2;
+		abort_if_fail(value(heap, parent) <= value(heap, i),
+				"Assertion failure");
+	}
+}
+#endif
+
+static void shift_up(Heap *heap, int idx)
+{
+	Interface *tmp = heap->data[idx];
+	double tmp_value = value(heap, idx);
+	while (idx > 0)
+	{
+		int parent = (idx - 1) / 2;
+		if (value(heap, parent) <= tmp_value)
+			break;
+		assign(heap, idx, heap->data[parent]);
+		idx = parent;
+	}
+	assign(heap, idx, tmp);
+
+	//assert_heap(heap);
+}
+
+static void shift_down(Heap *heap, int idx)
+{
+	Interface *tmp = heap->data[idx];
+	double tmp_value = value(heap, idx);
+
+	while (idx < heap->len)
+	{
+		int left = idx * 2 + 1;
+		int right = idx * 2 + 2;
+		int sel = -1;
+
+		if (left < heap->len)
+			sel = left;
+
+		if (right < heap->len)
+		{
+			if (value(heap, right) < value(heap, left))
+				sel = right;
+		}
+
+		if (sel >= 0)
+		{
+			if (value(heap, sel) < tmp_value)
+			{
+				assign(heap, idx, heap->data[sel]);
+				idx = sel;
+				continue;
+			}
+		}
+		break;
+	}
+
+	abort_if_fail(idx < heap->len, "Assertion failure");
+
+	assign(heap, idx, tmp);
+
+	//assert_heap(heap);
+}
+
+static Heap *select_heap(Interface *iface)
+{
+	if (iface->addr.type == NETWORK_INET)
+		return ip4;
+	else
+		return ip6;
+}
+
+static void heap_insert(Heap *heap, Interface *iface)
+{
+	if (heap->alloc_len == 0)
+	{
+		heap->alloc_len = 8;
+		heap->data = malloc(sizeof(void *) * heap->alloc_len);
+	}
+	else if (heap->alloc_len >= heap->len)
+	{
+		heap->alloc_len *= 2;
+		heap->data = realloc(heap->data, sizeof(void *) * heap->alloc_len);
+	}
+	heap->len++;
+	assign(heap, heap->len - 1, iface);
+	shift_up(heap, heap->len - 1);
+}
+
 void interface_close(Interface *iface)
 {
 	iface->use_count--;
+	shift_up(select_heap(iface), iface->index);
 }
 
-static Interface *ifaces = NULL;
-NetworkType types;
+HostAddress interface_get_addr(Interface *iface)
+{
+	return iface->addr;
+}
 
 Interface *balancer_add(HostAddress addr, int metric)
 {
@@ -40,8 +169,7 @@ Interface *balancer_add(HostAddress addr, int metric)
 		iface->metric = 1;
 	iface->use_count = 0;
 	
-	iface->next = ifaces;
-	ifaces = iface;
+	heap_insert(select_heap(iface), iface);
 	types |= addr.type;
 	
 	return iface;
@@ -58,9 +186,12 @@ Interface *balancer_add_from_string(const char *addr_with_metric)
 
 	if (addr_str)
 	{
+		char *endptr;
 		s = host_address_from_str(addr_str, &addr);	
-		//TODO: Detect errors here
-		metric = atoi(metric_str);
+		metric = strtol(metric_str, &endptr, 10);
+		if (*endptr)
+			s = STATUS_FAILURE;
+		free(addr_str);
 	}
 	else
 	{
@@ -80,37 +211,40 @@ static const Error error_struct_no_iface[] = {{balancer_error_no_iface, NULL}};
 const Error *balancer_open_iface(NetworkType types,
 		Interface **iface_out, SocketHandle *hd_out)
 {
-	Interface *iter, *selected = NULL;
-	double iter_cost, selected_cost;
+	Heap *heaps[2] = { NULL, NULL };
+	Interface *selected = NULL;
+	Heap *selected_heap = NULL;
 	SocketHandle hd;
-	const Error *e;
-	
-	//TODO: Improve algorithm for O(log(n)) time complexity
-	for (iter = ifaces; iter; iter = iter->next)
+	const Error *e = NULL;
+	int i;
+
+	if (types & NETWORK_INET)
+		heaps[0] = ip4;
+	if (types & NETWORK_INET6)
+		heaps[1] = ip6;
+
+	for (i = 0; i < 2; i++)
 	{
-		if (! (iter->addr.type & types))
+		if (!heaps[i])
 			continue;
-		
-		iter_cost = (double) iter->use_count / (double) iter->metric;
-		
-		if (selected)
+
+		if (heaps[i]->len == 0)
+			continue;
+
+
+		if (selected_heap)
 		{
-			if (iter_cost < selected_cost)
-			{
-				selected = iter;
-				selected_cost = iter_cost;
-			}
+			if (value(heaps[i], 0) >= value(selected_heap, 0))
+				continue;
 		}
-		else
-		{
-			selected = iter;
-			selected_cost = iter_cost;
-		}
+
+		selected_heap = heaps[i];
 	}
 
-
-	if (! selected)
+	if (! selected_heap)
 		return error_struct_no_iface;
+
+	selected = selected_heap->data[0];
 
 	{
 		SocketAddress addr;
@@ -122,6 +256,7 @@ const Error *balancer_open_iface(NetworkType types,
 		return e;
 
 	selected->use_count++;
+	shift_down(selected_heap, selected->index);
 	*iface_out = selected;
 	*hd_out = hd;
 	return NULL;
@@ -134,13 +269,21 @@ NetworkType balancer_get_available_types()
 
 void balancer_shutdown()
 {
-	Interface *iter, *next;
+	int i, j;
+	Heap *heaps[2] = { ip4, ip6 };
 
-	for (iter = ifaces; iter; iter = next)
+	for (i = 0; i < 2; i++)
 	{
-		next = iter->next;
+		if (! heaps[i]->data)
+			break;
 
-		free(iter);
+		for (j = 0; j < heaps[i]->len; j++)
+			free(heaps[i]->data[j]);
+		free(heaps[i]->data);
+
+		memset(heaps[i], 0, sizeof(Heap));
 	}
-	ifaces = NULL;
+
+	types = 0;
 }
+

@@ -20,15 +20,10 @@
 
 
 typedef struct _Interface Interface;
-struct _Interface
-{
-	Interface *next;
-	int metric;
-	int use_count;
-	HostAddress addr;
-};
 
 void interface_close(Interface *iface);
+
+HostAddress interface_get_addr(Interface *iface);
 
 Interface *balancer_add(HostAddress addr, int metric);
 

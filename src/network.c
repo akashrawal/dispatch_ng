@@ -162,6 +162,8 @@ Status host_address_from_str(const char *str, HostAddress *addr_out)
 {
 	HostAddress addr;
 
+	memset(&addr, 0, sizeof(HostAddress));
+
 	//Skip all whitespace if any
 	while(isspace(*str))
 		str++;
@@ -327,6 +329,7 @@ Status socket_address_from_str(const char *str, SocketAddress *addr_out)
 		if (parse_long(port_str, &port) == STATUS_SUCCESS)
 		{
 			SocketAddress addr;
+			memset(&addr, 0, sizeof(SocketAddress));
 
 			addr.port = htons(port);
 

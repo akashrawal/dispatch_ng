@@ -11,6 +11,7 @@ libtest_a_LIBADD = $(common_libadd)
 check_PROGRAMS = \
 	utils \
 	network \
+	balancer \
 	setup \
 	test-ipv4 \
 	test-ipv6
