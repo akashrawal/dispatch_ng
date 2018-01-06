@@ -21,8 +21,6 @@
 #include "incl.h"
 #include <signal.h>
 
-//TODO: Unit test framework
-
 int main(int argc, char *argv[])
 {
 	int i, len;

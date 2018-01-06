@@ -20,7 +20,6 @@
 
 #include "incl.h"
 
-//TODO: Add error strings for more errors
 //Errors
 define_static_error(connector_error_dns_fail, "DNS lookup failure");
 
@@ -30,6 +29,12 @@ struct _AddrList
 	AddrList *next;
 	SocketAddress addr;
 };
+
+typedef struct
+{
+	struct evdns_request *req;
+	Connector *connector;
+} DnsContext;
 
 struct _Connector
 {
@@ -43,8 +48,12 @@ struct _Connector
 
 	//DNS subsystem
 	uint16_t port;
-	struct evdns_request *request_v4;
-	struct evdns_request *request_v6;
+	DnsContext dnsv4;
+	DnsContext dnsv6;
+	//Edit in
+	//constructor
+	//Function
+	//Callback
 	
 	//Callback subsystem
 	int returned;
@@ -162,13 +171,12 @@ static void conn_start(Connector *connector)
 
 		//Open a suitable interface
 		e = balancer_open_iface(addr.host.type, &connector->iface, &connector->hd);
-		//TODO: Should we abort here or handle failure?
-		abort_if_fail(connector->iface, "Assertion failure");
 		if (e)
 		{
 			conn_set_last_error(connector, e);
 			continue;
 		}
+		abort_if_fail(connector->iface, "Assertion failure");
 
 		//Enable non-blocking
 		e = socket_handle_set_blocking(connector->hd, 0);
@@ -224,13 +232,12 @@ static void conn_start(Connector *connector)
 			res.e = connector_error_dns_fail_instance;
 
 		connector_return(connector, res);
+		return;
 	}
 
 	abort_if_fail((connector->iface ? 1 : 0) == (connector->event ? 1 : 0),
 			"Assertion failure");
 }
-
-//TODO: unit tests somehow
 
 static void conn_add_addr(Connector *connector, SocketAddress addr)
 {
@@ -263,34 +270,34 @@ static void conn_set_final(Connector *connector)
 static void dns_init(Connector *connector)
 {
 	//Only nonzero members need to be set.
+	connector->dnsv4.connector = connector;
+	connector->dnsv6.connector = connector;
 }
 
 static void dns_free(Connector *connector)
 {
-	if (connector->request_v4)
-		evdns_cancel_request(evdns_base, connector->request_v4);	
-	if (connector->request_v6)
-		evdns_cancel_request(evdns_base, connector->request_v6);	
+	if (connector->dnsv4.req)
+		evdns_cancel_request(evdns_base, connector->dnsv4.req);	
+	if (connector->dnsv6.req)
+		evdns_cancel_request(evdns_base, connector->dnsv6.req);	
 }
 
 static void dns_cb(int result, char type, int count, int ttl, void *addresses,
 		void *data)
 {
-	Connector *connector = (Connector *) data;
-	struct evdns_request **request_ptr;
+	DnsContext *dns_ctx = (DnsContext *) data;
+	Connector *connector = dns_ctx->connector;
 	NetworkType addr_type;
 	size_t addr_size;
 	size_t i;
 
-	if (type == DNS_IPv4_A)
+	if (dns_ctx == &connector->dnsv4)
 	{
-		request_ptr = &(connector->request_v4);
 		addr_type = NETWORK_INET;
 		addr_size = 4;
 	}
-	else if (type == DNS_IPv6_AAAA)
+	else if (dns_ctx == &connector->dnsv6)
 	{
-		request_ptr = &(connector->request_v6);
 		addr_type = NETWORK_INET6;
 		addr_size = 16;
 	}
@@ -300,19 +307,24 @@ static void dns_cb(int result, char type, int count, int ttl, void *addresses,
 		return; //< Unreachable
 	}
 
-	//TODO: Verify that *request_ptr does not leak
-	//      This part is ambiguous
-	*request_ptr = NULL;	
+	abort_if_fail(dns_ctx->req, "Assertion failure");
+
+	dns_ctx->req = NULL;
 
 	if (result == DNS_ERR_NONE)
 	{
+		if (addr_type == NETWORK_INET)
+			abort_if_fail(type == DNS_IPv4_A, "Assertion failure");
+		if (addr_type == NETWORK_INET6)
+			abort_if_fail(type == DNS_IPv6_AAAA, "Assertion failure");
+
 		//Add addresses
 		for (i = 0; i < count; i++)
 		{
 			SocketAddress addr;
 
 			addr.host.type = addr_type;
-			memcpy(addr.host.ip, ((char *)addresses) + (addr_size * count),
+			memcpy(addr.host.ip, ((char *)addresses) + (addr_size * i),
 					addr_size);
 			addr.port = connector->port;
 
@@ -321,7 +333,7 @@ static void dns_cb(int result, char type, int count, int ttl, void *addresses,
 	}
 
 	//Set 'final' when no running DNS requests are present
-	if (!connector->request_v4 && !connector->request_v6)
+	if (!connector->dnsv4.req && !connector->dnsv6.req)
 	{
 		conn_set_final(connector);
 	}
@@ -338,17 +350,17 @@ static void dns_start(Connector *connector, const char *addr, uint16_t port)
 	//Start correct resolvers
 	if (types & NETWORK_INET)
 	{
-		connector->request_v4 = evdns_base_resolve_ipv4(evdns_base, addr, 0,
-				dns_cb, connector);
-		if (! connector->request_v4)
+		connector->dnsv4.req = evdns_base_resolve_ipv4(evdns_base, addr, 0,
+				dns_cb, &connector->dnsv4);
+		if (! connector->dnsv4.req)
 			types &= ~NETWORK_INET;
 	}
 
 	if (types & NETWORK_INET6)
 	{
-		connector->request_v6 = evdns_base_resolve_ipv6(evdns_base, addr, 0,
-				dns_cb, connector);
-		if (! connector->request_v6)
+		connector->dnsv6.req = evdns_base_resolve_ipv6(evdns_base, addr, 0,
+				dns_cb, &connector->dnsv6);
+		if (! connector->dnsv6.req)
 			types &= ~NETWORK_INET6;
 	}
 	if (! types)

@@ -19,17 +19,6 @@
  */
 
 
-//TODO: Remove, errno is no longer usable for networking
-#ifndef EWOULDBLOCK
-#define IO_TEMP_ERROR(e) ((e == EAGAIN) || (e == EINTR))
-#else
-#if (EAGAIN == EWOULDBLOCK)
-#define IO_TEMP_ERROR(e) ((e == EAGAIN) || (e == EINTR))
-#else
-#define IO_TEMP_ERROR(e) ((e == EAGAIN) || (e == EWOULDBLOCK) || (e == EINTR))
-#endif
-#endif
-
 //Status reporting
 typedef enum
 {

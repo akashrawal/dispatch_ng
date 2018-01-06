@@ -42,7 +42,6 @@ const char *socks_reply_to_str(int code)
 	return socks_error_strings[code];
 }
 
-//TODO: Add newly added error strings
 int socks_reply_from_error(const Error *e)
 {
 	if (!e)

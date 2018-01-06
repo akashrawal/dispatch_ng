@@ -560,7 +560,7 @@ void session_authenticator(Session *session)
 			domain[domain_len] = 0;
 			
 			//Copy out port
-			port = ntohs(*((uint16_t *) (buffer + 5 + domain_len)));
+			port = *((uint16_t *) (buffer + 5 + domain_len));
 			
 			session_log(session, 
 				"Received request to connect to domain name \"%s:%d\"", 
@@ -652,7 +652,6 @@ Session *session_create(SocketHandle hd)
 
 	
 	//Initialize others
-	//TODO: session ID
 	session->sid = session_counter++;
 	session->iface = NULL;
 	session->connector = NULL;

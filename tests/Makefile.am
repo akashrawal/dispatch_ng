@@ -14,7 +14,8 @@ check_PROGRAMS = \
 	balancer \
 	setup \
 	test-ipv4 \
-	test-ipv6
+	test-ipv6 \
+	test-domain
 
 TESTS = $(check_PROGRAMS)
 AM_CFLAGS = $(common_cflags)
