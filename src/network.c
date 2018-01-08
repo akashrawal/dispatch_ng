@@ -28,6 +28,16 @@
 #include <ctype.h>
 #include <fcntl.h>
 
+#ifndef EWOULDBLOCK
+#define IO_TEMP_ERROR(e) ((e == EAGAIN) || (e == EINTR))
+#else
+#if (EAGAIN == EWOULDBLOCK)
+#define IO_TEMP_ERROR(e) ((e == EAGAIN) || (e == EINTR))
+#else
+#define IO_TEMP_ERROR(e) ((e == EAGAIN) || (e == EWOULDBLOCK) || (e == EINTR))
+#endif
+#endif
+
 //Socket error definitions
 const char socket_error_generic[] = "Generic socket error";
 

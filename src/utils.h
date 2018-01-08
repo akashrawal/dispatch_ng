@@ -18,7 +18,6 @@
  * along with dispatch_ng.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 //Status reporting
 typedef enum
 {
