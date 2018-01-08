@@ -10,13 +10,13 @@ libdispatch_a_SOURCES = incl.h \
 		connector.c  connector.h        \
 		session.c    session.h          \
 		server.c     server.h 
-libdispatch_a_CFLAGS = $(DISPATCH_NG_CFLAGS)
-libdispatch_a_LIBADD = $(DISPATCH_NG_LIBS)
+libdispatch_a_CFLAGS = $(EVENT_CFLAGS)
+#libdispatch_a_LIBADD = $(EVENT_LIBS)
 
  
 #The program
 dispatch_ng_SOURCES = main.c
-dispatch_ng_CFLAGS = $(DISPATCH_NG_CFLAGS)
-dispatch_ng_LDADD = $(DISPATCH_NG_LIBS) libdispatch.a
+dispatch_ng_CFLAGS = $(EVENT_CFLAGS)
+dispatch_ng_LDADD = libdispatch.a $(EVENT_LIBS)
                       
 

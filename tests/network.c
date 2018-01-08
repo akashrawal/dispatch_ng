@@ -66,6 +66,8 @@ int test_getsockname(const char *i_str)
 
 int main()
 {
+	utils_init();
+
 	test_run(test_socket_address("192.168.56.101:7080", same));
 	test_run(test_socket_address("[1:2:3:4:5:6:7:8]:7080", same));
 	test_run(test_socket_address("[::]:7080", same));
@@ -77,4 +79,6 @@ int main()
 	test_run(test_socket_address("[::10]:7080", same));
 
 	test_run(test_getsockname("127.0.0.1:7080"));
+
+	utils_shutdown();
 }

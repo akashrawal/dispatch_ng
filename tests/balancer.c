@@ -91,6 +91,8 @@ int test_balancer(NetworkType network_types, const AddressList *addrs)
 
 int main()
 {
+	utils_init();
+	
 	test_run(test_balancer(NETWORK_INET, (const AddressList[]) {
 			{"0.0.0.0", 1},
 			{"0.0.0.0", 1},
@@ -140,6 +142,7 @@ int main()
 			{"", 0}
 		}));
 
+	utils_shutdown();
 	return 0;
 }
 

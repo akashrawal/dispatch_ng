@@ -1,12 +1,12 @@
 
-common_cflags = $(DISPATCH_NG_CFLAGS) -I$(top_srcdir)
-common_libadd = $(DISPATCH_NG_LIBS) ../src/libdispatch.a
+common_cflags = $(EVENT_CFLAGS) -I$(top_srcdir)
+common_libadd = ../src/libdispatch.a $(EVENT_LIBS)
 
 
 check_LIBRARIES = libtest.a
 libtest_a_SOURCES = libtest.c libtest.h
 libtest_a_CFLAGS = $(common_cflags)
-libtest_a_LIBADD = $(common_libadd)
+#libtest_a_LIBADD = $(common_libadd)
 
 check_PROGRAMS = \
 	utils \

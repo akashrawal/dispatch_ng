@@ -27,9 +27,6 @@ int main(int argc, char *argv[])
 	int bound = 0, iface_count = 0;
 	int loop_stat;
 	
-	//Ignore that useless signal
-	signal(SIGPIPE, SIG_IGN);
-	
 	//Call init functions
 	utils_init();
 	

@@ -22,6 +22,12 @@
 
 #include <fcntl.h>
 
+#ifdef _WIN32
+#include <winsock2.h> //wsastartup
+#else
+#include <signal.h> //signal
+#endif
+
 //Abort functions
 
 void abort_with_error(const char *fmt, ...)
@@ -198,14 +204,28 @@ void evloop_release()
 }
 
 //Module initializer
+#ifdef _WIN32
+WSADATA wsadata;
+#endif
+
 void utils_init()
 {
+#ifdef _WIN32
+	abort_if_fail(WSAStartup(MAKEWORD(2, 2), &wsadata) == 0,
+			"Winsock failed to start");
+#else
+	//Ignore that useless signal
+	signal(SIGPIPE, SIG_IGN);
+#endif
 	evbase = event_base_new();
 	evdns_base = evdns_base_new(evbase, 1);
 }
 
 void utils_shutdown()
 {
+#ifdef _WIN32
+	WSACleanup();
+#endif
 	evdns_base_free(evdns_base, 0);
 	event_base_free(evbase);
 }

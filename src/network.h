@@ -72,7 +72,7 @@ SocketAddress address_from_socks(NetworkType type, const void *data);
 //Socket handle
 typedef struct
 {
-	int fd;	
+	evutil_socket_t fd;
 } SocketHandle;
 
 void socket_handle_close(SocketHandle hd);
