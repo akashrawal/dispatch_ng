@@ -322,10 +322,10 @@ static void actor_prepare(Actor *p)
 
 void actor_destroy(Actor *p)
 {
-	socket_handle_close(p->hd);
 	if (p->event)
 	{
 		event_free(p->event);
+		socket_handle_close(p->hd);
 		p->event = NULL;
 	}
 	free(p);

@@ -134,12 +134,12 @@ static void heap_insert(Heap *heap, Interface *iface)
 	if (heap->alloc_len == 0)
 	{
 		heap->alloc_len = 8;
-		heap->data = malloc(sizeof(void *) * heap->alloc_len);
+		heap->data = fs_malloc(sizeof(void *) * heap->alloc_len);
 	}
 	else if (heap->alloc_len >= heap->len)
 	{
 		heap->alloc_len *= 2;
-		heap->data = realloc(heap->data, sizeof(void *) * heap->alloc_len);
+		heap->data = fs_realloc(heap->data, sizeof(void *) * heap->alloc_len);
 	}
 	heap->len++;
 	assign(heap, heap->len - 1, iface);
@@ -275,7 +275,7 @@ void balancer_shutdown()
 	for (i = 0; i < 2; i++)
 	{
 		if (! heaps[i]->data)
-			break;
+			continue;
 
 		for (j = 0; j < heaps[i]->len; j++)
 			free(heaps[i]->data[j]);

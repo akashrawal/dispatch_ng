@@ -41,7 +41,7 @@ int test_balancer(NetworkType network_types, const AddressList *addrs)
 	for (n_addrs = 0; addrs[n_addrs].istr[0]; n_addrs++)
 		;
 
-	CheckList *check = malloc(sizeof(CheckList) * n_addrs);
+	CheckList *check = fs_malloc(sizeof(CheckList) * n_addrs);
 
 	for (i = 0; i < n_addrs; i++)
 	{
