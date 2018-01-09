@@ -326,19 +326,32 @@ static void session_prepare(Session *session)
 		session->lanes[lane].evt = evt;
 	}
 
+	//Cancel the connector when we are closing down the session
+	//TODO: Add tests for misbehaving clients
+	if (session->state == SESSION_SHUTDOWN || session->state == SESSION_CLOSED)
+	{
+		if (session->connector)
+		{
+			connector_destroy(session->connector);
+			session->connector = NULL;
+		}
+	}
+
 	//Assertion
 	abort_if_fail(session->lanes[SESSION_CLIENT].evt
 			|| session->lanes[SESSION_REMOTE].evt
 			|| session->connector
 			? session->state != SESSION_CLOSED
 			: session->state == SESSION_CLOSED,
-			"Assertion failure (session entered dead state)");
+			"Assertion failure (session %d entered dead state)",
+			session->sid);
 
 	abort_if_fail(session->state == SESSION_CONNECTED 
 			? session->lanes[SESSION_CLIENT].evt
 				|| session->lanes[SESSION_REMOTE].evt
 			: 1,
-			"Assertion failure (session entered semidead state)");
+			"Assertion failure (session %d entered semidead state)",
+			session->sid);
 
 	//Call callbacks
 	if (session->state != session->prev_state)
