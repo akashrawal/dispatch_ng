@@ -3,6 +3,10 @@ image: $CI_REGISTRY/akash_rawal/buildenv:dispatch_ng
 
 linux:
     script:
+        - libtoolize
+        - aclocal
+        - automake --add-missing
+        - autoconf
         - mkdir build
         - cd build
         - ../configure CFLAGS="-Wall"
