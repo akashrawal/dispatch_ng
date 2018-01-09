@@ -13,7 +13,7 @@ linux:
         - make -j`nproc` check-valgrind
     artifacts:
         expire_in: 2 weeks
-        when: on_failure
+        when: always
         paths:
             - build/*.log
             - build/tests/*.log
