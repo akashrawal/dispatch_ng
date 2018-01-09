@@ -15,5 +15,5 @@ linux:
         expire_in: 2 weeks
         when: on_failure
         paths:
-            - ./*.log
-            - tests/*.log
+            - build/*.log
+            - build/tests/*.log
