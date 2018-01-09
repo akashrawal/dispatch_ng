@@ -141,7 +141,7 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 {
 	SocketHandle hd;
 	Session *session = (Session *) data;
-	int lane, opposite;
+	int lane;
 	size_t io_res;
 	const Error *e;
 	int shutdown_needed = 0;
@@ -154,7 +154,6 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 	}
 
 	hd = session->lanes[lane].hd;
-	opposite = 1 - lane;
 	
 	//Assertions
 	abort_if_fail(session->state != SESSION_CLOSED,
@@ -195,12 +194,16 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			shutdown_needed = 1;
 		}
 		else
+		{
 			session->lanes[lane].end += io_res;
+		}
 	}
 	
 	//Write from opposite buffer
 	if (events & EV_WRITE)
 	{
+		int opposite = 1 - lane;
+		
 		e = socket_handle_write(hd, 
 			session->lanes[opposite].buffer + session->lanes[opposite].start,
 			session->lanes[opposite].end - session->lanes[opposite].start,
@@ -221,7 +224,9 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 			e = NULL;
 		}
 		else
+		{
 			session->lanes[opposite].start += io_res;
+		}
 		
 		//If start of buffer crosses middle,
 		//shift the buffer contents to beginning
@@ -263,8 +268,9 @@ static void session_check(evutil_socket_t fd, short events, void *data)
 		int cond = 0, i;
 		for(i = 0; i < 2; i++)
 		{
+			int opposite = 1 - i;
 			cond += session->lanes[i].hd_valid
-				? session->lanes[i].end - session->lanes[i].start
+				? session->lanes[opposite].end - session->lanes[opposite].start
 				: 0;
 		}
 		if (!cond)

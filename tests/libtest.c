@@ -152,7 +152,9 @@ struct _Actor
 	int is_odd_sprite; //< Strictly 0 or 1
 	int dialog, pos;
 	struct event *event;
-	/* if (p->dialog % 2 == p->is_odd_sprite)
+	/* is_odd_sprite explanation: 
+	 *
+	 * if (p->dialog % 2 == p->is_odd_sprite)
 	 *     write(p->script[p->dialog]);
 	 * else
 	 *     read(p->script[p->dialog]);
@@ -200,7 +202,7 @@ static void actor_check(evutil_socket_t fd, short events, void *data)
 
 		if (p->dialog % 2 == p->is_odd_sprite)
 		{
-			size_t out;
+			size_t out = 0;
 
 			//Write
 			abort_if_fail(events & EV_WRITE && (! (events & EV_READ)),
@@ -238,7 +240,7 @@ static void actor_check(evutil_socket_t fd, short events, void *data)
 		}
 		else
 		{
-			size_t out;
+			size_t out = 0;
 			unsigned char buf[64];
 
 			//Read
@@ -262,7 +264,8 @@ static void actor_check(evutil_socket_t fd, short events, void *data)
 			else
 			{
 				int i;
-				abort_if_fail(out > 0, "Assertion failure");
+				abort_if_fail(out > 0, "read() returned EOF, dialog = %d, pos = %d",
+						p->dialog, p->pos);
 				abort_if_fail(out <= cl.len - p->pos,
 						"Too much data received");
 				for (i = 0; i < out; i++)

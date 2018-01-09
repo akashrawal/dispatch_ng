@@ -43,6 +43,7 @@ static void session_state_change_cb
 			event_free(server->evt);
 			server->evt = NULL;
 			evloop_release();
+			fprintf(stderr, "TMP: Releasing event loop\n");
 		}
 	}
 

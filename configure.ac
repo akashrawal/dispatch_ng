@@ -13,17 +13,14 @@ AC_PROG_RANLIB
 AM_PROG_AR
 
 # Checks for libraries.
-#AC_CHECK_LIB([event], [event_base_new], [], [AC_MSG_ERROR(["could not find required library libevent"])])
 PKG_CHECK_MODULES([EVENT], [libevent >= 2.1])
 AC_SEARCH_LIBS([socket], [ws2_32])
 
 # Checks for header files.
-#AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h string.h sys/socket.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 
 # Checks for library functions.
-#AC_CHECK_FUNCS([socket strerror])
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile

@@ -359,6 +359,12 @@ Status socket_address_from_str(const char *str, SocketAddress *addr_out)
 #define sockopt(x) (x)
 #endif
 
+//Native socket closing function
+#ifdef _WIN32
+#define nf_close closesocket
+#else
+#define nf_close close
+#endif
 
 //Native address
 typedef struct
@@ -409,17 +415,15 @@ static const Error *create_socket(NetworkType type, void *ip, uint16_t port,
 
 	native_addr = native_address_create(type, ip, port);
 
-	//mark1
 	if ((fd = socket(native_addr.pf, SOCK_STREAM, IPPROTO_TCP)) < 0)
 		return error_from_errno(nv_error, 0, "socket() failed");
 
 	{
 		const int one = 1;
-		//mark1
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
 					sockopt(&one), sizeof(one)) < 0)
 		{
-			close(fd);
+			nf_close(fd);
 			return error_from_errno(nv_error, 0,
 					"setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 1) failed");
 		}
@@ -427,7 +431,7 @@ static const Error *create_socket(NetworkType type, void *ip, uint16_t port,
 
 	if (bind(fd, &native_addr.data.generic, native_addr.size) < 0)
 	{
-		close(fd);
+		nf_close(fd);
 		return error_from_errno(nv_error, 0, "bind(fd = %d) failed", fd);
 	}
 
@@ -439,7 +443,7 @@ static const Error *create_socket(NetworkType type, void *ip, uint16_t port,
 //Closes the file descriptor
 void socket_handle_close(SocketHandle hd)
 {
-	close(hd.fd);
+	nf_close(hd.fd);
 }
 
 //Creates a new socket bound to the network interface and random port
@@ -462,7 +466,7 @@ const Error *socket_handle_create_listener
 
 	if (listen(hd.fd, SOMAXCONN) < 0)
 	{
-		close(hd.fd);
+		nf_close(hd.fd);
 		return error_from_errno(nv_error, 0, "listen(fd = %d) failed", hd.fd);
 	}
 
