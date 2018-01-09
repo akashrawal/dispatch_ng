@@ -24,8 +24,6 @@
 //Maximum size of address string representation
 #define ADDRESS_MAX_LEN (50)
 
-//TODO: Port to windows
-
 //Socket errors
 extern const char socket_error_generic[];
 
