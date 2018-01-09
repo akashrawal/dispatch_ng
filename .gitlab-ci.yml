@@ -1,0 +1,15 @@
+
+image: $CI_REGISTRY/akash_rawal/buildenv:dispatch_ng
+
+linux:
+    script:
+        - mkdir build
+        - cd build
+        - ../configure CFLAGS="-Wall"
+        - make -j`nproc` check-valgrind
+    artifacts:
+        expire_in: 2 weeks
+        when: on_failure
+        paths:
+            - ./*.log
+            - tests/*.log
