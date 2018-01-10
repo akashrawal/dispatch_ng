@@ -121,14 +121,6 @@ static void shift_down(Heap *heap, int idx)
 	//assert_heap(heap);
 }
 
-static Heap *select_heap(Interface *iface)
-{
-	if (iface->addr.type == NETWORK_INET)
-		return ip4;
-	else
-		return ip6;
-}
-
 static void heap_insert(Heap *heap, Interface *iface)
 {
 	if (heap->alloc_len == 0)
@@ -144,6 +136,30 @@ static void heap_insert(Heap *heap, Interface *iface)
 	heap->len++;
 	assign(heap, heap->len - 1, iface);
 	shift_up(heap, heap->len - 1);
+}
+
+static void heap_delete(Heap *heap, Interface *iface)
+{
+	abort_if_fail(heap->len && iface->index >= 0 && iface->index < heap->len, 
+			"Assertion failure");
+
+	int idx = iface->index;
+
+	iface->index = -1;
+	heap->len--;
+	if (idx < heap->len - 1)
+	{
+		heap->data[idx] = heap->data[heap->len - 1];
+		shift_down(heap, idx);	
+	}
+}
+
+static Heap *select_heap(Interface *iface)
+{
+	if (iface->addr.type == NETWORK_INET)
+		return ip4;
+	else
+		return ip6;
 }
 
 void interface_close(Interface *iface)
@@ -163,6 +179,7 @@ Interface *balancer_add(HostAddress addr, int metric)
 
 	iface = (Interface *) fs_malloc(sizeof(Interface));
 	
+	iface->index = -1;
 	iface->addr = addr;
 	iface->metric = metric;
 	if (iface->metric < 0)
@@ -203,6 +220,58 @@ Interface *balancer_add_from_string(const char *addr_with_metric)
 			"Failed to parse address %s", addr_with_metric);
 
 	return balancer_add(addr, metric);
+}
+
+/* Verify that all addressses can be bound to. 
+ * (Windows has a wierd problem that some IP addresses magically fail to bind.
+ * No explanation yet. Hence exists this workaround to make our lives a 
+ * bit easier.)
+ */
+void balancer_verify()
+{
+	int i, j;
+	int n_fails = 0;
+	Heap *heaps[2] = { ip4, ip6 };
+	for (i = 0; i < 2; i++)
+	{
+		if (heaps[i]->len == 0)
+			continue;
+
+		//Copy
+		Interface **ifaces = fs_malloc(sizeof(void *) * heaps[i]->len);
+		for (j = 0; j < heaps[i]->len; j++)	
+			ifaces[j] = heaps[i]->data[j];
+
+		for (j = 0; j < heaps[i]->len; j++)	
+		{
+			SocketHandle hd;
+			SocketAddress addr;
+			addr.host = ifaces[j]->addr;
+			addr.port = 0;
+			const Error *e = socket_handle_create_bound(addr, &hd);
+			if (e)
+			{
+				char str[ADDRESS_MAX_LEN];
+				host_address_to_str(addr.host, str);
+				fprintf(stderr, 
+						"Warning: Address %s is unusable, removing (%s)\n",
+							str, error_desc(e));
+				error_handle(e);
+				heap_delete(heaps[i], ifaces[j]);
+				n_fails++;
+			}
+		}
+		free(ifaces);
+	}
+	if (n_fails > 0)
+	{
+		fprintf(stderr, "Warning: %d addresses are not usable\n", n_fails);
+	}
+	if (ip4->len == 0 && ip6->len == 0)
+	{
+		fprintf(stderr, "Error: No addresses remaining!\n");
+		exit(2);
+	}
 }
 
 const char balancer_error_no_iface[] = "No suitable interface available";

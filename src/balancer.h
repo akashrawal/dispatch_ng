@@ -29,8 +29,7 @@ Interface *balancer_add(HostAddress addr, int metric);
 
 Interface *balancer_add_from_string(const char *addr_with_metric);
 
-//This function might no longer be needed
-//void balancer_verify();
+void balancer_verify();
 
 extern const char balancer_error_no_iface[];
 

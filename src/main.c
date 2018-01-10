@@ -56,6 +56,8 @@ int main(int argc, char *argv[])
 	{
 		abort_with_error("No addresses to dispatch.");
 	}
+
+	balancer_verify();
 	
 	//Default listening addresses
 	if (! bound)
