@@ -19,19 +19,19 @@ linux:
             - build/*.log
             - build/tests/*.log
 
-#mingw-w64:
-#    script:
-#        - libtoolize
-#        - aclocal
-#        - automake --add-missing
-#        - autoconf
-#        - mkdir build
-#        - cd build
-#        - x86_64-w64-mingw32-configure CFLAGS="-Wall"
-#        - make -j`nproc` LOG_COMPILER=wine check
-#    artifacts:
-#        expire_in: 2 weeks
-#        when: always
-#        paths:
-#            - build/*.log
-#            - build/tests/*.log
+mingw-w64:
+    script:
+        - libtoolize
+        - aclocal
+        - automake --add-missing
+        - autoconf
+        - mkdir build
+        - cd build
+        - x86_64-w64-mingw32-configure CFLAGS="-Wall"
+        - make -j`nproc` LOG_COMPILER=wine check
+    artifacts:
+        expire_in: 2 weeks
+        when: always
+        paths:
+            - build/*.log
+            - build/tests/*.log
