@@ -111,27 +111,27 @@ static const Error *error_from_errno
 	char *str;
 	const Error *e;
 	const char *type;
-	const char *errno_val_str;
+	const char *errno_val_str = NULL;
+	char *errno_val_str_a = NULL;
 
 #ifdef _WIN32
-	char errno_val_buf[32];
 	char *fmstr = NULL;
 	if (FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER
 			| FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 			NULL, errno_val, 0, (char *) &fmstr, 0, NULL) > 0)
 	{
-		errno_val_str = fmstr;
+		errno_val_str_a = fs_strdup_printf("%s (%d)", fmstr, errno_val);
 	}
 	else
 	{
-		snprintf(errno_val_buf, 31, "Unknown error %d", errno_val);
-		errno_val_buf[31] = 0;
-		errno_val_str = errno_val_buf;
+		errno_val_str_a = fs_strdup_printf("Unknown error %d", errno_val);
 		fmstr = NULL;
 	}
 #else
 	errno_val_str = strerror(errno_val);
 #endif
+	if (errno_val_str_a)
+		errno_val_str = errno_val_str_a;
 
 	va_start(arglist, fmt);
 	str = fs_strdup_vprintf(fmt, arglist);
@@ -147,6 +147,9 @@ static const Error *error_from_errno
 	if (fmstr)
 		LocalFree(fmstr);
 #endif
+
+	if (errno_val_str_a)
+		free(errno_val_str_a);
 
 	return e;
 }
