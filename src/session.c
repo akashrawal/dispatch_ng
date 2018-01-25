@@ -562,7 +562,7 @@ void session_authenticator(Session *session)
 			//Domain name
 			int domain_len;
 			char domain[257];
-			int port;
+			uint16_t port;
 			
 			buffer = session_peek(session, 5);
 			if (! buffer)
@@ -583,7 +583,7 @@ void session_authenticator(Session *session)
 			
 			session_log(session, 
 				"Received request to connect to domain name \"%s:%d\"", 
-				domain, port);
+				domain, ntohs(port));
 			
 			//Connect
 			session->connector = connector_connect_dns

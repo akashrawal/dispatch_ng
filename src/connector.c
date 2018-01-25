@@ -21,7 +21,7 @@
 #include "incl.h"
 
 //Errors
-define_static_error(connector_error_dns_fail, "DNS lookup failure");
+define_static_error(connector_error_no_addrs, "No usable addresses");
 
 typedef struct _AddrList AddrList;
 struct _AddrList
@@ -29,12 +29,6 @@ struct _AddrList
 	AddrList *next;
 	SocketAddress addr;
 };
-
-typedef struct
-{
-	struct evdns_request *req;
-	Connector *connector;
-} DnsContext;
 
 struct _Connector
 {
@@ -48,12 +42,7 @@ struct _Connector
 
 	//DNS subsystem
 	uint16_t port;
-	DnsContext dnsv4;
-	DnsContext dnsv6;
-	//Edit in
-	//constructor
-	//Function
-	//Callback
+	DnsRequest *dns_request;
 	
 	//Callback subsystem
 	int returned;
@@ -229,7 +218,7 @@ static void conn_start(Connector *connector)
 		connector->last_error = NULL;
 
 		if (! res.e)
-			res.e = connector_error_dns_fail_instance;
+			res.e = connector_error_no_addrs_instance;
 
 		connector_return(connector, res);
 		return;
@@ -270,73 +259,35 @@ static void conn_set_final(Connector *connector)
 static void dns_init(Connector *connector)
 {
 	//Only nonzero members need to be set.
-	connector->dnsv4.connector = connector;
-	connector->dnsv6.connector = connector;
 }
 
 static void dns_free(Connector *connector)
 {
-	if (connector->dnsv4.req)
-		evdns_cancel_request(evdns_base, connector->dnsv4.req);	
-	if (connector->dnsv6.req)
-		evdns_cancel_request(evdns_base, connector->dnsv6.req);	
+	if (connector->dns_request)
+	{
+		dns_request_destroy(connector->dns_request);
+		connector->dns_request = NULL;
+	}
 }
 
-static void dns_cb(int result, char type, int count, int ttl, void *addresses,
-		void *data)
+static void dns_cb
+(const Error *e, size_t n_addrs, SocketAddress *addrs, void *data)
 {
-	DnsContext *dns_ctx = (DnsContext *) data;
-	Connector *connector = dns_ctx->connector;
-	NetworkType addr_type;
-	size_t addr_size;
 	size_t i;
+	Connector *connector = (Connector *) data;
 
-	if (dns_ctx == &connector->dnsv4)
+	if (e)
 	{
-		addr_type = NETWORK_INET;
-		addr_size = 4;
-	}
-	else if (dns_ctx == &connector->dnsv6)
-	{
-		addr_type = NETWORK_INET6;
-		addr_size = 16;
+		conn_set_last_error(connector, e);	
 	}
 	else
 	{
-		abort_with_error("Assertion failure: unreachable code");
-		return; //< Unreachable
+		for (i = 0; i < n_addrs; i++)
+			conn_add_addr(connector, addrs[i]);
 	}
-
-	abort_if_fail(dns_ctx->req, "Assertion failure");
-
-	dns_ctx->req = NULL;
-
-	if (result == DNS_ERR_NONE)
-	{
-		if (addr_type == NETWORK_INET)
-			abort_if_fail(type == DNS_IPv4_A, "Assertion failure");
-		if (addr_type == NETWORK_INET6)
-			abort_if_fail(type == DNS_IPv6_AAAA, "Assertion failure");
-
-		//Add addresses
-		for (i = 0; i < count; i++)
-		{
-			SocketAddress addr;
-
-			addr.host.type = addr_type;
-			memcpy(addr.host.ip, ((char *)addresses) + (addr_size * i),
-					addr_size);
-			addr.port = connector->port;
-
-			conn_add_addr(connector, addr);
-		}
-	}
-
-	//Set 'final' when no running DNS requests are present
-	if (!connector->dnsv4.req && !connector->dnsv6.req)
-	{
-		conn_set_final(connector);
-	}
+	if (addrs)
+		free(addrs);
+	conn_set_final(connector);
 }
 
 static void dns_start(Connector *connector, const char *addr, uint16_t port)
@@ -344,32 +295,8 @@ static void dns_start(Connector *connector, const char *addr, uint16_t port)
 	//Set the port
 	connector->port = port;
 
-	//Check which ones are available
-	NetworkType types = balancer_get_available_types();
-
-	//Start correct resolvers
-	if (types & NETWORK_INET)
-	{
-		connector->dnsv4.req = evdns_base_resolve_ipv4(evdns_base, addr, 0,
-				dns_cb, &connector->dnsv4);
-		if (! connector->dnsv4.req)
-			types &= ~NETWORK_INET;
-	}
-
-	if (types & NETWORK_INET6)
-	{
-		connector->dnsv6.req = evdns_base_resolve_ipv6(evdns_base, addr, 0,
-				dns_cb, &connector->dnsv6);
-		if (! connector->dnsv6.req)
-			types &= ~NETWORK_INET6;
-	}
-	if (! types)
-	{
-		ConnectRes res;
-		memset(&res, 0, sizeof(ConnectRes));
-		res.e = connector_error_dns_fail_instance;
-	
-	}
+	connector->dns_request = dns_request_resolve
+		(addr, port, balancer_get_available_types(), dns_cb, connector);
 }
 
 //Rest of the connector

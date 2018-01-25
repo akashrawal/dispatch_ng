@@ -19,7 +19,7 @@
  */
 
 //Error messaages
-extern const char connector_error_dns_fail[];
+extern const char connector_error_no_addrs[];
 
 typedef struct 
 {

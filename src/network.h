@@ -36,6 +36,7 @@ extern const char socket_error_timeout[];
 extern const char socket_error_network_unreachable[];
 extern const char socket_error_host_unreachable[];
 extern const char socket_error_connection_refused[];
+extern const char socket_error_dns_failure[];
 extern const char socket_error_unsupported_backend_feature[];
 
 //Type of network, IPV4 or IPV6
@@ -99,6 +100,20 @@ const Error *socket_handle_set_blocking(SocketHandle hd, int val);
 
 const Error *socket_handle_write
 	(SocketHandle hd, const void *data, size_t len, size_t *out);
+
 const Error *socket_handle_read
 	(SocketHandle hd, void *data, size_t len, size_t *out);
+
+//Asynchronous DNS
+typedef struct _DnsRequest DnsRequest;
+
+//TODO: Errors (DNS failure errors, backend failure)
+typedef void (*DnsResponseCB)
+	(const Error *e, size_t n_addrs, SocketAddress *addrs, void *data);
+
+DnsRequest *dns_request_resolve
+	(const char *hostname, uint16_t port, NetworkType types,
+	 DnsResponseCB cb, void *cb_data);
+
+void dns_request_destroy(DnsRequest *dns_ctx);
 

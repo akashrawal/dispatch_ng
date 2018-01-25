@@ -67,6 +67,7 @@ const char socket_error_timeout[] = "Operation timed out";
 const char socket_error_network_unreachable[] = "Network unreachable";
 const char socket_error_host_unreachable[] = "Host unreachable";
 const char socket_error_connection_refused[] = "Connection refused";
+const char socket_error_dns_failure[] = "DNS failure";
 const char socket_error_unsupported_backend_feature[]
 = "The current socket backend exhibits a feature that we cannot handle";
 
@@ -367,16 +368,23 @@ Status socket_address_from_str(const char *str, SocketAddress *addr_out)
 #endif
 
 //Native address
-typedef struct
+typedef union
 {
-	socklen_t size;
-	int pf;
-	union {
-		struct sockaddr generic;
-		struct sockaddr_in inet;
-		struct sockaddr_in6 inet6;
-	} data;
+	struct sockaddr generic;
+	struct sockaddr_in inet;
+	struct sockaddr_in6 inet6;
 } NativeAddress;
+
+static size_t native_address_size(NativeAddress native_addr)
+{
+	return (native_addr.generic.sa_family == AF_INET)
+		? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+}
+
+static int native_address_pf(NativeAddress native_addr)
+{
+	return (native_addr.generic.sa_family == AF_INET) ? PF_INET : PF_INET6;
+}
 
 //Create native address
 static NativeAddress native_address_create
@@ -388,23 +396,51 @@ static NativeAddress native_address_create
 
 	if (type == NETWORK_INET)
 	{
-		native_addr.data.inet.sin_family = AF_INET;
-		memcpy(&native_addr.data.inet.sin_addr, ip, 4);
-		native_addr.data.inet.sin_port = port;
-		native_addr.pf = PF_INET;
-		native_addr.size = sizeof(struct sockaddr_in);
+		native_addr.inet.sin_family = AF_INET;
+		memcpy(&native_addr.inet.sin_addr, ip, 4);
+		native_addr.inet.sin_port = port;
 	}
 	else
 	{
-		native_addr.data.inet6.sin6_family = AF_INET6;
-		memcpy(&native_addr.data.inet6.sin6_addr, ip, 16);
-		native_addr.data.inet6.sin6_port = port;
-		native_addr.pf = PF_INET6;
-		native_addr.size = sizeof(struct sockaddr_in6);
+		native_addr.inet6.sin6_family = AF_INET6;
+		memcpy(&native_addr.inet6.sin6_addr, ip, 16);
+		native_addr.inet6.sin6_port = port;
 	}
 
 	return native_addr;
 }
+
+static const Error *native_address_get_socket_address
+	(struct sockaddr *native_addr, SocketAddress *addr_out)
+{
+	SocketAddress res;
+	memset(&res, 0, sizeof(res));
+
+	if (native_addr->sa_family == AF_INET)
+	{
+		struct sockaddr_in *inet4_addr = (struct sockaddr_in *) native_addr;
+		res.host.type = NETWORK_INET;
+		memcpy(res.host.ip, &inet4_addr->sin_addr, 4);
+		res.port = inet4_addr->sin_port;
+	}
+	else if (native_addr->sa_family == AF_INET6)
+	{
+		struct sockaddr_in6 *inet6_addr = (struct sockaddr_in6 *) native_addr;
+		res.host.type = NETWORK_INET6;
+		memcpy(res.host.ip, &inet6_addr->sin6_addr, 16);
+		res.port = inet6_addr->sin6_port;
+	}
+	else
+	{
+		return error_printf(socket_error_unsupported_backend_feature,
+				"Unsupported address family %d",
+				(int) native_addr->sa_family);
+	}
+
+	*addr_out = res;
+	return NULL;
+}
+
 
 //Create socket
 static const Error *create_socket(NetworkType type, void *ip, uint16_t port,
@@ -415,7 +451,8 @@ static const Error *create_socket(NetworkType type, void *ip, uint16_t port,
 
 	native_addr = native_address_create(type, ip, port);
 
-	if ((fd = socket(native_addr.pf, SOCK_STREAM, IPPROTO_TCP)) < 0)
+	fd = socket(native_address_pf(native_addr), SOCK_STREAM, IPPROTO_TCP);
+	if (fd < 0)
 		return error_from_errno(nv_error, 0, "socket() failed");
 
 	{
@@ -429,7 +466,7 @@ static const Error *create_socket(NetworkType type, void *ip, uint16_t port,
 		}
 	}
 
-	if (bind(fd, &native_addr.data.generic, native_addr.size) < 0)
+	if (bind(fd, &native_addr.generic, native_address_size(native_addr)) < 0)
 	{
 		nf_close(fd);
 		return error_from_errno(nv_error, 0, "bind(fd = %d) failed", fd);
@@ -495,9 +532,12 @@ const Error *socket_handle_connect(SocketHandle hd, SocketAddress addr)
 	native_addr = native_address_create
 		(addr.host.type, addr.host.ip, addr.port);
 	
-	if (connect(hd.fd, &native_addr.data.generic, native_addr.size) < 0)
+	if (connect(hd.fd, &native_addr.generic, native_address_size(native_addr))
+			< 0)
+	{
 		return error_from_errno(nv_error, WA_CONNECT,
 				"connect(fd = %d) failed", hd.fd);
+	}
 
 	return NULL;
 }
@@ -534,37 +574,13 @@ const Error *socket_handle_get_status(SocketHandle hd)
 const Error *socket_handle_getsockname
 	(SocketHandle hd, SocketAddress *addr_out)
 {
-	union
-	{
-		struct sockaddr generic;
-		struct sockaddr_in ipv4;
-		struct sockaddr_in6 ipv6;
-	} native_addr;
-	socklen_t native_addr_len = sizeof(native_addr);
+	NativeAddress native_addr;
+	socklen_t native_addr_len = sizeof(NativeAddress);
 	
 	if (getsockname(hd.fd, &native_addr.generic, &native_addr_len) < 0)
 		return error_from_errno(nv_error, 0, "getsockname(fd = %d)", hd.fd);
 
-	//Convert native address to SocketAddress	
-	if (native_addr.generic.sa_family == AF_INET)
-	{
-		addr_out->host.type = NETWORK_INET;
-		memcpy(addr_out->host.ip, &native_addr.ipv4.sin_addr, 4);
-		addr_out->port = native_addr.ipv4.sin_port;
-	}
-	else if (native_addr.generic.sa_family == AF_INET6)
-	{
-		addr_out->host.type = NETWORK_INET6;
-		memcpy(addr_out->host.ip, &native_addr.ipv6.sin6_addr, 16);
-		addr_out->port = native_addr.ipv6.sin6_port;
-	}
-	else
-	{
-		return error_printf(socket_error_unsupported_backend_feature,
-				"Unsupported address family %d",
-				(int) native_addr.generic.sa_family);
-	}
-	return NULL;
+	return native_address_get_socket_address(&native_addr.generic, addr_out);
 }
 
 //Enables or disables nonblocking IO mode
@@ -621,4 +637,117 @@ const Error *socket_handle_read
 	return NULL;
 }
 
+//Asynchronous DNS
+struct _DnsRequest
+{
+	DnsResponseCB cb;
+	void *cb_data;
+	struct evdns_getaddrinfo_request *evdns_req;
+};
 
+static void dns_getaddrinfo_cb
+	(int result, struct evutil_addrinfo *res, void *arg)
+{
+	DnsRequest *dns_ctx = (DnsRequest *) arg;
+	struct evutil_addrinfo *iter;
+	const Error *e = NULL;
+	SocketAddress *addrs = NULL;
+	size_t n_addrs = 0;
+
+	dns_ctx->evdns_req = NULL;
+
+	//Do not continue on cancellation, cleanup has beed done
+	if (result == DNS_ERR_CANCEL || result == DNS_ERR_SHUTDOWN)
+		return;
+
+	if (result == DNS_ERR_NONE)
+	{
+		size_t i;
+
+		for (iter = res; iter; iter = iter->ai_next)
+			n_addrs++;
+		
+		addrs = fs_malloc(sizeof(SocketAddress) * n_addrs);
+
+		for (iter = res, i = 0; iter; iter = iter->ai_next, i++)
+		{
+			e = native_address_get_socket_address(iter->ai_addr, addrs + i);
+			if (e)
+			{
+				free(addrs);
+				addrs = NULL;
+				n_addrs = 0;
+				break;
+			}
+		}
+
+		if (res)
+			evutil_freeaddrinfo(res);
+	}
+	else
+	{
+		e = error_printf(socket_error_dns_failure, "DNS lookup failure");
+	}
+
+	(* dns_ctx->cb)(e, n_addrs, addrs, dns_ctx->cb_data);
+}
+
+//Start resolving an address.
+DnsRequest *dns_request_resolve
+	(const char *hostname, uint16_t port, NetworkType types,
+	 DnsResponseCB cb, void *cb_data)
+{
+	DnsRequest *dns_ctx;
+	char service[10];
+	struct evutil_addrinfo hints;
+
+	//Build object
+	dns_ctx = fs_malloc(sizeof(DnsRequest));
+	dns_ctx->cb = cb;
+	dns_ctx->cb_data = cb_data;
+	dns_ctx->evdns_req = NULL;
+
+	//Prepare hints
+	memset(&hints, 0, sizeof(struct evutil_addrinfo));
+	if (types & NETWORK_INET)
+	{
+		if (types & NETWORK_INET6)
+			hints.ai_family = AF_UNSPEC;
+		else
+			hints.ai_family = AF_INET;
+	}
+	else if (types & NETWORK_INET6)
+	{
+		//TODO: See why IPv6 DNS is broken
+		hints.ai_family = AF_INET6;
+	}
+	else
+	{
+		(*cb)(error_printf(socket_error_dns_failure,
+				"'types' must have atleast NETWORK_INET or NETWORK_INET6"),
+				0, NULL, cb_data);
+		return dns_ctx;
+	}
+
+	//Prepare port number
+	snprintf(service, 10, "%u", (unsigned int) ntohs(port));
+	service[9] = 0;
+
+
+	//Resolve (This may call the user callback right here so beware)
+	dns_ctx->evdns_req = evdns_getaddrinfo
+		(evdns_base, hostname, service, &hints, dns_getaddrinfo_cb, dns_ctx);
+
+	return dns_ctx;
+}
+
+//Destroy resolver context. If resolving was in progress, it is cancelled.
+void dns_request_destroy(DnsRequest *dns_ctx)
+{
+	if (dns_ctx->evdns_req)
+	{
+		evdns_getaddrinfo_cancel(dns_ctx->evdns_req);
+		dns_ctx->evdns_req = NULL;
+	}
+	free(dns_ctx);
+}

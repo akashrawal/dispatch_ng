@@ -20,6 +20,9 @@
 
 #include "incl.h"
 
+//Errors
+define_static_error(balancer_error_no_iface, "No interfaces are available");
+
 //Interface data structure
 struct _Interface
 {
@@ -274,8 +277,8 @@ void balancer_verify()
 	}
 }
 
-const char balancer_error_no_iface[] = "No suitable interface available";
-static const Error error_struct_no_iface[] = {{balancer_error_no_iface, NULL}};
+define_static_error(balancer_struct_no_iface,
+		"No suitable interface available");
 
 const Error *balancer_open_iface(NetworkType types,
 		Interface **iface_out, SocketHandle *hd_out)
@@ -311,7 +314,7 @@ const Error *balancer_open_iface(NetworkType types,
 	}
 
 	if (! selected_heap)
-		return error_struct_no_iface;
+		return balancer_error_no_iface_instance;
 
 	selected = selected_heap->data[0];
 
