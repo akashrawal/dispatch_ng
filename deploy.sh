@@ -3,7 +3,8 @@
 
 if test "$CI_COMMIT_REF_NAME" = "master"; then
 	#Nightly release
-	version="nightly-`date +"%Y%m%d-%H%M%S"`"
+	version="nightly"
+	prefix="nightly-`date +"%Y%m%d-%H%M%S"`/"
 fi
 
 
@@ -22,11 +23,8 @@ upload()
 	package="$2"
 	remotefile="$3"
 
-	curl -X POST -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/$package/versions" \
-		-d "{ \"name\" : \"$version\" , \"desc\" : \"Unstable build\" }" 
 	curl -T "$localfile" -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/$package/$version/${remotefile}${opts}?publish=1"
+		"$BINTRAY_PROJECT/$package/$version/${prefix}${remotefile}?publish=1"
 }
 
 echo "Deploying to $BINTRAY_PROJECT, version $version"
