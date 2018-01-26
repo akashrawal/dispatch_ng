@@ -36,3 +36,5 @@ elif test "$CI_JOB_NAME" = "linux"; then
 else
 	echo "No deployment from $CI_JOB_NAME"
 fi
+echo
+echo
