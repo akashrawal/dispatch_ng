@@ -12,6 +12,7 @@ linux:
         - ../configure CFLAGS="-Wall"
         - make -j`nproc` check-valgrind
         - make -j`nproc` distcheck
+        - ../deploy.sh
     artifacts:
         expire_in: 2 weeks
         when: always
@@ -29,6 +30,7 @@ mingw-w64:
         - cd build
         - x86_64-w64-mingw32-configure CFLAGS="-Wall"
         - make -j`nproc` LOG_COMPILER=wine check
+        - ../deploy.sh
     artifacts:
         expire_in: 2 weeks
         when: always
