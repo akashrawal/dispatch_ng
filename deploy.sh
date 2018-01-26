@@ -26,7 +26,7 @@ upload()
 	curl -T "$localfile" -u"$BINTRAY_KEY" \
 		"$BINTRAY_PROJECT/$package/$version/${prefix}${remotefile}?publish=1"
 	curl -X PUT -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/${prefix}${remotefile}" \
+		"${BINTRAY_PROJECT/content/file_metadata}/${prefix}${remotefile}" \
 		-d "{ \"list_in_downloads\" : true }"
 }
 
