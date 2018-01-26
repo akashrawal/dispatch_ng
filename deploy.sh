@@ -21,8 +21,9 @@ upload()
 	localfile="$1"
 	package="$2"
 	remotefile="$3"
+	opts="?publish=1?override=1"
 	curl -T "$localfile" -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/$package/$BINTRAY_VERSION/$remotefile?publish=1"
+		"$BINTRAY_PROJECT/$package/$BINTRAY_VERSION/${remotefile}${opts}"
 }
 
 echo "Deploying to $BINTRAY_PROJECT, version $BINTRAY_VERSION"
