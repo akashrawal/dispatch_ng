@@ -18,12 +18,16 @@ fi
 
 echo "Deploying to $BINTRAY_PROJECT, version $BINTRAY_VERSION"
 if test "$CI_JOB_NAME" = "mingw-w64"; then
-	curl -T src/dispatch-ng.exe -u$BINTRAY_KEY \
-		$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/dispatch-ng.exe
+	curl -T "src/dispatch-ng.exe" -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/dispatch-ng.exe"
+	curl -X POST -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/publish"
 elif test "$CI_JOB_NAME" = "linux"; then
 	filename="`ls | grep 'dispatch_ng.*\.tar\.gz'`"
-	curl -T "$filename" -u$BINTRAY_KEY \
-		$BINTRAY_PROJECT/source/$BINTRAY_VERSION/dispatch_ng.tar.gz
+	curl -T "$filename" -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/source/$BINTRAY_VERSION/dispatch_ng.tar.gz"
+	curl -X POST -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/source/$BINTRAY_VERSION/publish"
 else
 	echo "No deployment from $CI_JOB_NAME"
 fi
