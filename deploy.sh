@@ -18,7 +18,7 @@ fi
 
 echo "Deploying to $BINTRAY_PROJECT, version $BINTRAY_VERSION"
 if test "$CI_JOB_NAME" = "mingw-w64"; then
-	curl -T tests/dispatch-ng.exe -u$BINTRAY_KEY \
+	curl -T src/dispatch-ng.exe -u$BINTRAY_KEY \
 		$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/dispatch-ng.exe
 elif test "$CI_JOB_NAME" = "linux"; then
 	filename="`ls | grep 'dispatch_ng.*\.tar\.gz'`"
