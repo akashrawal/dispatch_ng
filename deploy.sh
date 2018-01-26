@@ -25,6 +25,9 @@ upload()
 
 	curl -T "$localfile" -u"$BINTRAY_KEY" \
 		"$BINTRAY_PROJECT/$package/$version/${prefix}${remotefile}?publish=1"
+	curl -X PUT -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/${prefix}${remotefile}" \
+		-d "{ \"list_in_downloads\" : true }"
 }
 
 echo "Deploying to $BINTRAY_PROJECT, version $version"
