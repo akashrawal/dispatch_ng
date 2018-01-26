@@ -30,7 +30,7 @@ upload()
 		-d "{ \"list_in_downloads\" : true }"
 }
 
-echo "Deploying to $BINTRAY_PROJECT, version $version"
+echo "Deploying to $BINTRAY_PROJECT, version $version, path $prefix"
 if test "$CI_JOB_NAME" = "mingw-w64"; then
 	upload "src/dispatch-ng.exe" "mingw-w64" "dispatch-ng.exe"
 elif test "$CI_JOB_NAME" = "linux"; then
