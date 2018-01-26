@@ -3,7 +3,7 @@
 
 if test "$CI_COMMIT_REF_NAME" = "master"; then
 	#Nightly release
-	BINTRAY_VERSION="nightly"
+	version="nightly-`date +"%Y%m%d-%H%M%S"`"
 fi
 
 
@@ -12,7 +12,7 @@ if test -z "$BINTRAY_PROJECT" || test -z "$BINTRAY_KEY"; then
 	exit
 fi
 
-if test -z "$BINTRAY_VERSION"; then
+if test -z "$version"; then
 	echo "Cannot deduce suitable version, skipping deployment"
 fi
 
@@ -21,12 +21,15 @@ upload()
 	localfile="$1"
 	package="$2"
 	remotefile="$3"
-	opts="?publish=1?override=1"
+
+	curl -X POST -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/$package/versions" \
+		-d "{ \"name\" : \"$version\" , \"desc\" : \"Unstable build\" }" 
 	curl -T "$localfile" -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/$package/$BINTRAY_VERSION/${remotefile}${opts}"
+		"$BINTRAY_PROJECT/$package/$version/${remotefile}${opts}?publish=1"
 }
 
-echo "Deploying to $BINTRAY_PROJECT, version $BINTRAY_VERSION"
+echo "Deploying to $BINTRAY_PROJECT, version $version"
 if test "$CI_JOB_NAME" = "mingw-w64"; then
 	upload "src/dispatch-ng.exe" "mingw-w64" "dispatch-ng.exe"
 elif test "$CI_JOB_NAME" = "linux"; then
