@@ -16,18 +16,21 @@ if test -z "$BINTRAY_VERSION"; then
 	echo "Cannot deduce suitable version, skipping deployment"
 fi
 
+upload()
+{
+	localfile="$1"
+	package="$2"
+	remotefile="$3"
+	curl -T "$localfile" -u"$BINTRAY_KEY" \
+		"$BINTRAY_PROJECT/$package/$BINTRAY_VERSION/$remotefile?publish=1"
+}
+
 echo "Deploying to $BINTRAY_PROJECT, version $BINTRAY_VERSION"
 if test "$CI_JOB_NAME" = "mingw-w64"; then
-	curl -T "src/dispatch-ng.exe" -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/dispatch-ng.exe"
-	curl -X POST -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/publish"
+	upload "src/dispatch-ng.exe" "mingw-w64" "dispatch-ng.exe"
 elif test "$CI_JOB_NAME" = "linux"; then
 	filename="`ls | grep 'dispatch_ng.*\.tar\.gz'`"
-	curl -T "$filename" -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/source/$BINTRAY_VERSION/dispatch_ng.tar.gz"
-	curl -X POST -u"$BINTRAY_KEY" \
-		"$BINTRAY_PROJECT/source/$BINTRAY_VERSION/publish"
+	upload "$filename" "source" "dispatch_ng.tar.gz"
 else
 	echo "No deployment from $CI_JOB_NAME"
 fi
