@@ -37,18 +37,4 @@ mingw-w64:
         paths:
             - build/*.log
             - build/tests/*.log
-
-mingw-w64-nightly:
-    script:
-        - libtoolize
-        - aclocal
-        - automake --add-missing
-        - autoconf
-        - mkdir build
-        - cd build
-        - x86_64-w64-mingw32-configure CFLAGS="-Wall"
-        - make -j`nproc` LOG_COMPILER=wine check
-    artifacts:
-        when: on_success
-        paths:
             - build/src/dispatch-ng.exe
