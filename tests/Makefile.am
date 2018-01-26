@@ -15,7 +15,8 @@ check_PROGRAMS = \
 	setup \
 	test-ipv4 \
 	test-ipv6 \
-	test-domain
+	test-domain \
+	test-domain-ipv6
 
 TESTS = $(check_PROGRAMS)
 AM_CFLAGS = $(common_cflags)

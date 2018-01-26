@@ -667,25 +667,32 @@ static void dns_getaddrinfo_cb
 	{
 		size_t i;
 
-		for (iter = res; iter; iter = iter->ai_next)
-			n_addrs++;
-		
-		addrs = fs_malloc(sizeof(SocketAddress) * n_addrs);
-
-		for (iter = res, i = 0; iter; iter = iter->ai_next, i++)
-		{
-			e = native_address_get_socket_address(iter->ai_addr, addrs + i);
-			if (e)
-			{
-				free(addrs);
-				addrs = NULL;
-				n_addrs = 0;
-				break;
-			}
-		}
-
 		if (res)
+		{
+			for (iter = res; iter; iter = iter->ai_next)
+				n_addrs++;
+			
+			addrs = fs_malloc(sizeof(SocketAddress) * n_addrs);
+
+			for (iter = res, i = 0; iter; iter = iter->ai_next, i++)
+			{
+				e = native_address_get_socket_address(iter->ai_addr, addrs + i);
+				if (e)
+				{
+					free(addrs);
+					addrs = NULL;
+					n_addrs = 0;
+					break;
+				}
+			}
 			evutil_freeaddrinfo(res);
+		}
+		else
+		{
+			//FIXME: This code is reached for ipv6 DNS, why?
+			e = error_printf(socket_error_dns_failure,
+					"Buggy evutil_getaddrinfo() behavior");
+		}
 	}
 	else
 	{
@@ -721,7 +728,6 @@ DnsRequest *dns_request_resolve
 	}
 	else if (types & NETWORK_INET6)
 	{
-		//TODO: See why IPv6 DNS is broken
 		hints.ai_family = AF_INET6;
 	}
 	else
@@ -731,6 +737,7 @@ DnsRequest *dns_request_resolve
 				0, NULL, cb_data);
 		return dns_ctx;
 	}
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
 
 	//Prepare port number
 	snprintf(service, 10, "%u", (unsigned int) ntohs(port));
