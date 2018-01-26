@@ -21,7 +21,7 @@ if test "$CI_JOB_NAME" = "mingw-w64"; then
 	curl -T tests/dispatch-ng.exe -u$BINTRAY_KEY \
 		$BINTRAY_PROJECT/mingw-w64/$BINTRAY_VERSION/dispatch-ng.exe
 else if "$CI_JOB_NAME" = "linux"; then
-	filename="`ls | grep 'dispatch_ng.*\.tar\.gz'"
+	filename="`ls | grep 'dispatch_ng.*\.tar\.gz'`"
 	curl -T "$filename" -u$BINTRAY_KEY \
 		$BINTRAY_PROJECT/source/$BINTRAY_VERSION/dispatch_ng.tar.gz
 else
