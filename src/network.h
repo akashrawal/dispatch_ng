@@ -107,7 +107,6 @@ const Error *socket_handle_read
 //Asynchronous DNS
 typedef struct _DnsRequest DnsRequest;
 
-//TODO: Errors (DNS failure errors, backend failure)
 typedef void (*DnsResponseCB)
 	(const Error *e, size_t n_addrs, SocketAddress *addrs, void *data);
 
