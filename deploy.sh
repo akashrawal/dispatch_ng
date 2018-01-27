@@ -18,6 +18,7 @@ fi
 
 if test -z "$version"; then
 	echo "Cannot deduce suitable version, skipping deployment"
+	exit
 fi
 
 upload()
