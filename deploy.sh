@@ -38,7 +38,7 @@ upload()
 		"$BINTRAY_PROJECT/$package/$version/${prefix}${remotefile}?publish=1"
 	curl -X PUT -u"$BINTRAY_KEY" \
 		"${BINTRAY_PROJECT/content/file_metadata}/${prefix}${remotefile}" \
-		-d "{ \"list_in_downloads\" : true }"
+		-d "{ \"list_in_downloads\":true }"
 }
 
 #curl()
