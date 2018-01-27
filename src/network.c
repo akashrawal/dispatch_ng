@@ -663,36 +663,27 @@ static void dns_getaddrinfo_cb
 	if (result == DNS_ERR_CANCEL || result == DNS_ERR_SHUTDOWN)
 		return;
 
-	if (result == DNS_ERR_NONE)
+	if (res && result == DNS_ERR_NONE)
 	{
 		size_t i;
 
-		if (res)
-		{
-			for (iter = res; iter; iter = iter->ai_next)
-				n_addrs++;
-			
-			addrs = fs_malloc(sizeof(SocketAddress) * n_addrs);
+		for (iter = res; iter; iter = iter->ai_next)
+			n_addrs++;
+		
+		addrs = fs_malloc(sizeof(SocketAddress) * n_addrs);
 
-			for (iter = res, i = 0; iter; iter = iter->ai_next, i++)
-			{
-				e = native_address_get_socket_address(iter->ai_addr, addrs + i);
-				if (e)
-				{
-					free(addrs);
-					addrs = NULL;
-					n_addrs = 0;
-					break;
-				}
-			}
-			evutil_freeaddrinfo(res);
-		}
-		else
+		for (iter = res, i = 0; iter; iter = iter->ai_next, i++)
 		{
-			//FIXME: This code is reached for ipv6 DNS, why?
-			e = error_printf(socket_error_dns_failure,
-					"Buggy evutil_getaddrinfo() behavior");
+			e = native_address_get_socket_address(iter->ai_addr, addrs + i);
+			if (e)
+			{
+				free(addrs);
+				addrs = NULL;
+				n_addrs = 0;
+				break;
+			}
 		}
+		evutil_freeaddrinfo(res);
 	}
 	else
 	{
