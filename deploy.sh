@@ -7,7 +7,7 @@ if test "$CI_COMMIT_REF_NAME" = "master"; then
 	prefix="nightly-`date +"%Y%m%d-%H%M%S"`/"
 elif test "${CI_COMMIT_REF_NAME:0:8}" = "release-"; then
 	version="${CI_COMMIT_REF_NAME:8}"
-	prefix="release-$version"
+	prefix="release-$version/"
 fi
 
 
