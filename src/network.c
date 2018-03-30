@@ -121,11 +121,11 @@ static const Error *error_from_errno
 			NULL, errno_val, 0, (char *) &fmstr, 0, NULL) > 0)
 	{
 		errno_val_str_a = fs_strdup_printf("%s (%d)", fmstr, errno_val);
+		LocalFree(fmstr);
 	}
 	else
 	{
 		errno_val_str_a = fs_strdup_printf("Unknown error %d", errno_val);
-		fmstr = NULL;
 	}
 #else
 	errno_val_str = strerror(errno_val);
@@ -142,11 +142,6 @@ static const Error *error_from_errno
 	e = error_printf(type, "%s: %s", str, errno_val_str);
 
 	free(str);
-
-#ifdef _WIN32
-	if (fmstr)
-		LocalFree(fmstr);
-#endif
 
 	if (errno_val_str_a)
 		free(errno_val_str_a);
