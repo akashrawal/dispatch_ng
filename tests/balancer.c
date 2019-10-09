@@ -91,6 +91,8 @@ int test_balancer(NetworkType network_types, const AddressList *addrs)
 
 int main()
 {
+	require_ipv6();
+
 	utils_init();
 	
 	test_run(test_balancer(NETWORK_INET, (const AddressList[]) {

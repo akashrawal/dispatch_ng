@@ -32,6 +32,8 @@ char script_text[] =
 
 int main()
 {
+	require_ipv6();
+
 	Actor *client, *server;
 	Server *proxy;
 	SocketAddress proxy_addr, server_addr;

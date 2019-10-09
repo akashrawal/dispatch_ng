@@ -405,3 +405,31 @@ void test_open_listener
 	*addr_out = addr;
 }
 
+#ifndef _WIN32
+#include <sys/socket.h>
+#include <errno.h>
+
+void require_ipv6()
+{
+	int fd = socket(PF_INET6, SOCK_STREAM, IPPROTO_TCP);
+	if (fd < 0)
+	{
+		if (errno == EAFNOSUPPORT)
+		{
+			fprintf(stderr,
+					"require_ipv6(): IPV6 not supported, skipping test\n");
+			exit(77);
+		}
+		else
+		{
+			fprintf(stderr, 
+					"Failed to create test socket: %s\n", strerror(errno));
+		}
+	}
+	close(fd);
+}
+#else
+void require_ipv6()
+{
+}
+#endif

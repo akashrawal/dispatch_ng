@@ -88,3 +88,5 @@ Actor *actor_create_client(SocketAddress addr, ScriptElement *script);
 
 void test_open_listener
 	(const char *host, SocketHandle *hd_out, SocketAddress *addr_out);
+
+void require_ipv6();
