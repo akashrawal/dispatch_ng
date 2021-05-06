@@ -20,8 +20,7 @@ connections are used.
 
 ## Downloads
 
-- [Source](https://bintray.com/akashrawal/dispatch_ng/source)
-- [Windows build](https://bintray.com/akashrawal/dispatch_ng/mingw-w64)
+- Source archive and Windows binary download are present in the [Package Registry](https://gitlab.com/akash_rawal/dispatch_ng/-/packages)
 
 
 ## Building from git
