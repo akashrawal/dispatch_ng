@@ -15,7 +15,7 @@ if test -z "$version"; then
 	exit
 fi
 
-upload_root="$CI_API_V4_URL/projects/$CI_PROJECT_PATH/packages/generic"
+upload_root="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic"
 
 curl_auth() {
 	#Print out curl commandline but hide the job token"
