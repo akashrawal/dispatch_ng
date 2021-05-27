@@ -20,8 +20,8 @@ connections are used.
 
 ## Downloads
 
-- [Source](https://bintray.com/akashrawal/dispatch_ng/source)
-- [Windows build](https://bintray.com/akashrawal/dispatch_ng/mingw-w64)
+- [Source](https://gitlab.com/akash_rawal/dispatch_ng/-/packages?type=&sort=desc&orderBy=created_at&search[]=source&search[]=)
+- [Windows build](https://gitlab.com/akash_rawal/dispatch_ng/-/packages?type=&sort=desc&orderBy=created_at&search[]=mingw-w64&search[]=)
 
 
 ## Building from git
