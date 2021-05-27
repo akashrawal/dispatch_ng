@@ -20,8 +20,7 @@ connections are used.
 
 ## Downloads
 
-- [Source](https://gitlab.com/akash_rawal/dispatch_ng/-/packages?type=&sort=desc&orderBy=created_at&search[]=source&search[]=)
-- [Windows build](https://gitlab.com/akash_rawal/dispatch_ng/-/packages?type=&sort=desc&orderBy=created_at&search[]=mingw-w64&search[]=)
+- [Source and Windows build](https://gitlab.com/akash_rawal/dispatch_ng/-/packages)
 
 
 ## Building from git
