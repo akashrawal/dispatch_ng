@@ -1,0 +1,12 @@
+[package]
+name = "dispatch-ng"
+version = "2.0.0"
+edition = "2021"
+
+
+[dependencies]
+log = "0"
+env_logger = "0"
+futures = "0.3"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
