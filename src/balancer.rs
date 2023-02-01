@@ -27,18 +27,6 @@ impl EasyOrd for MetricState {
     }
 }
 
-fn update_use_count<T : Hash + Eq + Clone>(
-    heap : &mut BalanceHeap<T, OrdWrapper<MetricState>>, 
-    value : T,
-    delta : isize
-) {
-    let OrdWrapper(MetricState { use_count, metric }) 
-        = heap.get(&value).unwrap().clone();
-    heap.update(value, OrdWrapper(MetricState { 
-        use_count : ((use_count as isize) + delta) as usize, 
-        metric,
-    }));
-}
 
 //Balancer state
 pub struct BalancerState {
@@ -79,6 +67,27 @@ impl Extend<IpAddr> for BalancerState {
     }
 }
 
+impl BalancerState {
+    fn chg_use_count(&mut self, addr : IpAddr, delta : isize) {
+        fn update_heap<T : Hash + Eq + Clone>(
+            heap : &mut BalanceHeap<T, OrdWrapper<MetricState>>, 
+            value : T,
+            delta : isize
+        ) {
+            let OrdWrapper(MetricState { use_count, metric }) 
+                = heap.get(&value).unwrap().clone();
+            heap.update(value, OrdWrapper(MetricState { 
+                use_count : ((use_count as isize) + delta) as usize, 
+                metric,
+            }));
+        }
+
+        match addr {
+            IpAddr::V4(addr) => update_heap(&mut self.v4_heap, addr, delta),
+            IpAddr::V6(addr) => update_heap(&mut self.v6_heap, addr, delta),
+        }
+    }
+}
 
 //Balancer
 #[derive(Clone)]
@@ -95,18 +104,22 @@ pub struct IpGuard {
     addr : IpAddr,
 }
 
+impl IpGuard {
+    pub fn get_addr(&self) -> IpAddr {
+        self.addr
+    }
+}
+
+
 impl Drop for IpGuard {
     fn drop(&mut self) {
         let mut lock = self.balancer.0.lock().unwrap();
-        match self.addr {
-            IpAddr::V4(addr) => update_use_count(&mut lock.v4_heap, addr, -1),
-            IpAddr::V6(addr) => update_use_count(&mut lock.v6_heap, addr, -1),
-        }
+        lock.chg_use_count(self.addr, -1);
     }
 }
 
 impl Balancer {
-    fn take(&self, take_v4 : bool, take_v6 : bool) -> Option<IpGuard> {
+    pub fn take(&self, take_v4 : bool, take_v6 : bool) -> Option<IpGuard> {
         let addr = {
             let mut lock = self.0.lock().unwrap();
             let mut list = Vec::<(IpAddr, OrdWrapper<MetricState>)>::new();
@@ -122,15 +135,8 @@ impl Balancer {
             }
             list.sort_by(|a, b| a.1.cmp(&b.1));
 
-            let addr = list.last()?.0.clone();
-            match addr {
-                IpAddr::V4(v4addr) => {
-                    update_use_count(&mut lock.v4_heap, v4addr, 1);
-                },
-                IpAddr::V6(v6addr) => {
-                    update_use_count(&mut lock.v6_heap, v6addr, 1);
-                },
-            }
+            let addr = list.last()?.0.clone(); 
+            lock.chg_use_count(addr, 1);
 
             addr
         };
@@ -139,24 +145,6 @@ impl Balancer {
             balancer : self.clone(),
             addr
         })
-    }
-
-    fn take_v4(&self) -> Option<(IpGuard, Ipv4Addr)> {
-        let guard = self.take(true, false)?;
-        let addr = match guard.addr {
-            IpAddr::V4(addr) => addr,
-            _ => return None,
-        };
-        Some((guard, addr))
-    }
-
-    fn take_v6(&self) -> Option<(IpGuard, Ipv6Addr)> {
-        let guard = self.take(true, false)?;
-        let addr = match guard.addr {
-            IpAddr::V6(addr) => addr,
-            _ => return None,
-        };
-        Some((guard, addr))
     }
 }
 
@@ -169,7 +157,8 @@ mod test {
         let addr1 = IpAddr::from([172, 16, 0, 1]);
         let addr2 = IpAddr::from([172, 16, 0, 2]);
 
-        let balancer = Balancer::new([ (addr1, 1), (addr2, 2) ].into_iter().collect());
+        let balancer = Balancer::new([ (addr1, 1), (addr2, 2) ]
+                                     .into_iter().collect());
 
         let res1 = balancer.take(true, true);
         let res2 = balancer.take(true, true);

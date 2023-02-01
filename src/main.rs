@@ -1,9 +1,13 @@
 mod ord;
-mod session;
 mod balance_heap;
 mod balancer;
+mod session;
 
 use std::borrow::Cow;
+
+use std::str::FromStr;
+
+use std::net::IpAddr;
 
 use clap::Parser;
 
@@ -12,6 +16,8 @@ use futures::stream::FuturesUnordered;
 
 use tokio::task::JoinHandle;
 use tokio::net::TcpListener;
+
+use balancer::Balancer;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -44,10 +50,19 @@ async fn async_main(args : Args) {
         Accept(std::io::Error),
     }
 
+    //Create the load balancer
+    let mut addrs = Vec::<IpAddr>::new();
+    for addr in args.addrs.into_iter() {
+        addrs.push(IpAddr::from_str(&addr)
+                   .unwrap_or_else(|e| panic!("Unable to parse address {}: {}", 
+                                              addr, e)));
+    }
+    let balancer = Balancer::new(addrs.into_iter().collect());
+
     //Start listening tasks
     let mut listeners : FuturesUnordered<JoinHandle<()>> 
         = listen_addrs.into_iter()
-        .map( |addr| tokio::spawn(listen(addr)) )
+        .map( |addr| tokio::spawn(listen(addr, balancer.clone())) )
         .collect();
 
     while let Some(result) = listeners.next().await {
@@ -61,7 +76,7 @@ async fn async_main(args : Args) {
 }
 
 //Listener task
-async fn listen(addr : Cow<'static, str>) {
+async fn listen(addr : Cow<'static, str>, balancer : Balancer) {
     let listener = TcpListener::bind(addr.as_ref()).await
         .unwrap_or_else(|e| {
             panic!("Unable to bind SOCKS5 listener at address {}: {}",
@@ -73,7 +88,7 @@ async fn listen(addr : Cow<'static, str>) {
             .await
             .expect("Unable to accept new connection");
     
-        tokio::spawn(session::enter(stream, remote_addr));
+        tokio::spawn(session::enter(stream, remote_addr, balancer.clone()));
     }
 }
 
@@ -89,10 +104,12 @@ fn main() {
     //Create and launch runtime
     let runtime = if args.threads == 1 {
         tokio::runtime::Builder::new_current_thread()
+            .enable_io()
             .build()
     } else {
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(args.threads)
+            .enable_io()
             .build()
     };
     let runtime = runtime.expect("Unable to create new runtime");
