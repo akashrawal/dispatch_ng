@@ -183,6 +183,7 @@ pub async fn enter(
 
             //Create socket
             let source_addr = SocketAddr::from((guard.get_addr(), 0)); 
+            log::debug!("{}: connecting from {}", client_addr, source_addr);
             let socket = if source_addr.is_ipv4() { 
                 TcpSocket::new_v4() 
             } else {

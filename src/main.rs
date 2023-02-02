@@ -50,12 +50,40 @@ async fn async_main(args : Args) {
         Accept(std::io::Error),
     }
 
+    //There should be atleast one address
+    if args.addrs.is_empty() {
+        panic!("No IP addresses provided for load balancing");
+    }
+
     //Create the load balancer
-    let mut addrs = Vec::<IpAddr>::new();
+    let mut addrs = Vec::<(IpAddr, usize)>::new();
     for addr in args.addrs.into_iter() {
-        addrs.push(IpAddr::from_str(&addr)
-                   .unwrap_or_else(|e| panic!("Unable to parse address {}: {}", 
-                                              addr, e)));
+        let parseres : Result<(IpAddr, usize), String> = (|| {
+            let mut iter = addr.split("@");
+            let addr_slice = iter.next()
+                .ok_or(String::from("Unable to extract IP address"))?;
+            let ipaddr = IpAddr::from_str(addr_slice)
+                .map_err(|e| e.to_string())?;
+
+            let metric = match iter.next() {
+                Some(v) => usize::from_str(v).map_err(|e| e.to_string())?,
+                None => 1
+            };
+
+            if metric < 1 {
+                return Err("Metric should be atleast 1".into());
+            }
+
+            if iter.next().is_some() {
+                return Err("There should be only one @ in an address to \
+indicate metric".into());
+            }
+
+            Ok(( ipaddr, metric ))
+        })();
+        addrs.push(parseres.unwrap_or_else(|e| {
+            panic!("Unable to parse address {}: {}", addr, e) 
+        }));
     }
     let balancer = Balancer::new(addrs.into_iter().collect());
 
