@@ -4,17 +4,16 @@ use std::borrow::Cow;
 
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpStream, TcpSocket};
 
 use crate::balancer::Balancer;
-
-const BUFSIZE : usize = 256;
 
 #[derive(Debug)]
 enum Error {
     Read(std::io::Error),
     Write(std::io::Error),
+    Copy(std::io::Error),
     Socket(std::io::Error),
     Bind(std::io::Error),
     Connect(std::io::Error),
@@ -68,9 +67,8 @@ pub async fn enter(
     log::debug!("{}: New SOCKS5 connection", client_addr);
 
     let result : Result<(), Error> = async {
-        let (mut istream, mut ostream) = stream.into_split();
-        //TODO: To buffer or not to buffer?
-        //let mut istream = BufReader::new(istream);
+        let (istream, mut ostream) = stream.into_split();
+        let mut istream = BufReader::new(istream);
 
         //Authentication
         //Read VER, NMETHODS
@@ -153,8 +151,9 @@ pub async fn enter(
                     let domain = String::from_utf8(bytes)
                         .map_err(Error::DomainIsNotStrimg)?;
 
-                    //We need to perform DNS lookup to get the addresses.
-                    tokio::net::lookup_host(domain).await
+                    //DNS lookup
+                    log::debug!("{}: Resolving {}", client_addr, domain);
+                    tokio::net::lookup_host(domain + ":0").await
                         .map_err(Error::NameResolution)?
                         .map(|socketaddr| socketaddr.ip())
                         .collect()
@@ -261,41 +260,13 @@ pub async fn enter(
         let (mut target_istream, mut target_ostream) 
             = target_stream.into_split();
 
-        //Transfer data between stream and target_stream
         log::debug!("{}: Established", client_addr);
-        let send_fut = async {
-            let mut buf = [0_u8; BUFSIZE];
 
-            loop {
-                let bytes = istream.read(&mut buf).await
-                    .map_err(Error::Read)?;
-                if bytes == 0 {
-                    break;
-                }
-                target_ostream.write_all(&buf[0..bytes]).await
-                    .map_err(Error::Write)?;
-            }
-
-            Ok::<(), Error>(())
-        };
-
-        let recv_fut = async {
-            let mut buf = [0_u8; BUFSIZE];
-
-            loop {
-                let bytes = target_istream.read(&mut buf).await
-                    .map_err(Error::Read)?;
-                if bytes == 0 {
-                    break;
-                }
-                ostream.write_all(&buf[0..bytes]).await
-                    .map_err(Error::Write)?;
-            }
-
-            Ok::<(), Error>(())
-        };
-
-        futures::try_join!(send_fut, recv_fut)?;
+        //Transfer data between stream and target_stream
+        let send_fut = tokio::io::copy_buf(&mut istream, &mut target_ostream);
+        let recv_fut = tokio::io::copy(&mut target_istream, &mut ostream);
+        futures::try_join!(send_fut, recv_fut)
+            .map_err(Error::Copy)?;
 
         Ok(())
     }.await;
