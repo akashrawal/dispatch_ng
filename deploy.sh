@@ -39,7 +39,7 @@ if test "$CI_JOB_NAME" = "mingw-w64"; then
 elif test "$CI_JOB_NAME" = "linux"; then
 	dist_name="dispatch-ng-$version"
 	mkdir "$dist_name"
-	cp -r Cargo.toml Cargo.lock LICENSE README src "${dist_name}/"
+	cp -r Cargo.toml Cargo.lock LICENSE README.md src "${dist_name}/"
 	tar -acf "$dist_name.tar.zst" "$dist_name"
 	upload "$filename" "source" "$dist_name.tar.zst"
 	upload "target/release/dispatch-ng" "linux" "dispatch-ng"
