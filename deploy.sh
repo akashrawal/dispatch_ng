@@ -1,6 +1,3 @@
-#!/bin/bash
-
-
 if test "$CI_COMMIT_REF_NAME" = "master"; then
 	#Nightly release
 	version="nightly"
@@ -37,12 +34,18 @@ upload()
 
 echo "Deploying to $upload_root, version $version, path $prefix"
 if test "$CI_JOB_NAME" = "mingw-w64"; then
-	upload "src/dispatch-ng.exe" "mingw-w64" "dispatch-ng.exe"
+	upload "target/x86_64-pc-windows-gnu/release/dispatch-ng.exe" \
+		"mingw-w64" "dispatch-ng.exe"
 elif test "$CI_JOB_NAME" = "linux"; then
-	filename="`ls | grep 'dispatch_ng.*\.tar\.gz'`"
-	upload "$filename" "source" "$filename"
+	dist_name="dispatch-ng-$version"
+	mkdir "$dist_name"
+	cp -r Cargo.toml Cargo.lock LICENSE README src "${dist_name}/"
+	tar -acf "$dist_name.tar.zst" "$dist_name"
+	upload "$filename" "source" "$dist_name.tar.zst"
+	upload "target/release/dispatch-ng" "linux" "dispatch-ng"
 else
 	echo "No deployment from $CI_JOB_NAME"
 fi
 echo
 echo
+

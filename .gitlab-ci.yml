@@ -1,40 +1,36 @@
-
-image: $CI_REGISTRY/akash_rawal/buildenv:dispatch_ng
-
 linux:
-    script:
-        - libtoolize
-        - aclocal
-        - automake --add-missing
-        - autoconf
-        - mkdir build
-        - cd build
-        - ../configure CFLAGS="-Wall"
-        - make -j`nproc` check-valgrind
-        - make -j`nproc` distcheck
-        - ../deploy.sh
-    artifacts:
-        expire_in: 2 weeks
-        when: always
-        paths:
-            - build/*.log
-            - build/tests/*.log
+  image: rust:alpine
+  script:
+    - apk add build-base
+    - export CARGO_HOME="$PWD/cargo"
+    - cargo test
+    - cargo build --release
+    - ./deploy.sh
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - target/release/dispatch-ng
+  cache:
+    key: cargo
+    paths:
+      - cargo
 
 mingw-w64:
-    script:
-        - libtoolize
-        - aclocal
-        - automake --add-missing
-        - autoconf
-        - mkdir build
-        - cd build
-        - x86_64-w64-mingw32-configure CFLAGS="-Wall"
-        - make -j`nproc` LOG_COMPILER=wine check
-        - ../deploy.sh
-    artifacts:
-        expire_in: 2 weeks
-        when: always
-        paths:
-            - build/*.log
-            - build/tests/*.log
-            - build/src/dispatch-ng.exe
+  image: rust:alpine
+  script:
+    - apk add build-base mingw-w64-gcc
+    - rustup target add x86_64-pc-windows-gnu
+    - export CARGO_HOME="$PWD/cargo"
+    - cargo build --release --target="x86_64-pc-windows-gnu"
+    - ./deploy.sh
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - target/x86_64-pc-windows-gnu/release/dispatch-ng.exe
+  cache:
+    key: cargo-mingw-w64
+    paths:
+      - cargo
+  

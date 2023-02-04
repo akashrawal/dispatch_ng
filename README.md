@@ -27,12 +27,4 @@ connections are used.
 
 	git clone https://gitlab.com/akash_rawal/dispatch_ng.git
 	cd dispatch_ng
-	libtoolize
-	aclocal
-	automake --add-missing
-	autoconf
-	mkdir build
-	cd build
-	../configure
-	make -j`nproc` check
-	sudo make install
+	cargo build --release
