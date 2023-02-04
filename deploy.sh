@@ -41,7 +41,7 @@ elif test "$CI_JOB_NAME" = "linux"; then
 	mkdir "$dist_name"
 	cp -r Cargo.toml Cargo.lock LICENSE README.md src "${dist_name}/"
 	tar -acf "$dist_name.tar.zst" "$dist_name"
-	upload "$filename" "source" "$dist_name.tar.zst"
+	upload "$dist_name.tar.zst" "source" "$dist_name.tar.zst"
 	upload "target/release/dispatch-ng" "linux" "dispatch-ng"
 else
 	echo "No deployment from $CI_JOB_NAME"
