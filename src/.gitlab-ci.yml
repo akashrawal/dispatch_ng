@@ -1,0 +1,10 @@
+linux:
+    image: rust:alpine
+    script:
+      - cargo test
+      - cargo build --release
+    artifacts:
+        expire_in: 2 weeks
+        when: always
+        paths:
+            - target/release/dispatch-ng
