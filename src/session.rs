@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpStream, TcpSocket};
 
 use crate::balancer::Balancer;
@@ -60,14 +60,14 @@ enum ReplyCode {
 }
 
 pub async fn enter(
-    stream : TcpStream, 
+    stream : impl AsyncRead + AsyncWrite, 
     client_addr : SocketAddr,
     balancer : Balancer
 ) {
     log::debug!("{}: New SOCKS5 connection", client_addr);
 
     let result : Result<(), Error> = async {
-        let (istream, mut ostream) = stream.into_split();
+        let (istream, mut ostream) = tokio::io::split(stream);
         let mut istream = BufReader::new(istream);
 
         //Authentication
@@ -276,4 +276,130 @@ pub async fn enter(
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use std::str::FromStr;
+    use std::net::Ipv6Addr;
+
+    use tokio::net::TcpListener;
+
+    async fn start_echo_server(bind_addr : IpAddr) -> SocketAddr {
+        let socket = TcpListener::bind((bind_addr, 0)).await
+            .expect("echo_server bind");
+        let addr = socket.local_addr().expect("echo_server getsockname");
+        tokio::spawn(async move {
+            while let Ok((client, _)) = socket.accept().await {
+                tokio::spawn(async move {
+                    let (mut client_read, mut client_write) 
+                        = tokio::io::split(client);
+                    tokio::io::copy(&mut client_read, &mut client_write).await
+                        .expect("echo_server copy");
+                });
+            }
+        });
+
+        addr
+    }
+
+    async fn start_session(addr : IpAddr) -> impl AsyncRead + AsyncWrite {
+        drop(env_logger::try_init());
+
+        let (mut socks, socks_server) = tokio::io::duplex(256);
+        let balancer = Balancer::new([addr].into_iter().collect());
+        tokio::spawn(enter(socks_server, 
+                           SocketAddr::from_str("127.0.0.1:1081").unwrap(),
+                           balancer));
+
+        socks.write_all(&[5_u8, 1, 0]).await.expect("handshake");
+        let mut resp = [0_u8; 2];
+        socks.read_exact(&mut resp).await.expect("handshake response");
+        assert_eq!(resp, [5, 0]);
+
+        socks
+    }
+
+    #[tokio::test]
+    async fn test_ipv4() {
+        let mut socks = start_session(Ipv4Addr::LOCALHOST.into()).await;
+        let server_addr = start_echo_server(Ipv4Addr::LOCALHOST.into()).await;
+
+        let mut msg = vec![5_u8, 1, 0, 1];
+        msg.extend(Ipv4Addr::LOCALHOST.octets());
+        msg.extend(server_addr.port().to_be_bytes());
+        socks.write_all(&msg).await.expect("request");
+        let mut resp = [0_u8; 10];
+        socks.read_exact(&mut resp).await.expect("response");
+        assert_eq!(&resp[0..4], &[5, 0, 0, 1]);
+
+        let msg = [1_u8, 2, 3, 4];
+        socks.write_all(&msg).await.expect("send"); 
+        let mut resp = [0_u8; 4];
+        socks.read_exact(&mut resp).await.expect("recv");
+        assert_eq!(msg, resp);
+    }
+
+    #[tokio::test]
+    async fn test_ipv4_domain() {
+        let mut socks = start_session(Ipv4Addr::LOCALHOST.into()).await;
+        let server_addr = start_echo_server(Ipv4Addr::LOCALHOST.into()).await;
+
+        let hostname = "localhost".as_bytes();
+        let mut msg = vec![5_u8, 1, 0, 3, hostname.len() as u8];
+        msg.extend(hostname);
+        msg.extend(server_addr.port().to_be_bytes());
+        socks.write_all(&msg).await.expect("request");
+        let mut resp = [0_u8; 10];
+        socks.read_exact(&mut resp).await.expect("response");
+        assert_eq!(&resp[0..4], &[5, 0, 0, 1]);
+
+        let msg = [1_u8, 2, 3, 4];
+        socks.write_all(&msg).await.expect("send"); 
+        let mut resp = [0_u8; 4];
+        socks.read_exact(&mut resp).await.expect("recv");
+        assert_eq!(msg, resp);
+    }
+
+    #[tokio::test]
+    async fn test_ipv6() {
+        let mut socks = start_session(Ipv6Addr::LOCALHOST.into()).await;
+        let server_addr = start_echo_server(Ipv6Addr::LOCALHOST.into()).await;
+
+        let mut msg = vec![5_u8, 1, 0, 4];
+        msg.extend(Ipv6Addr::LOCALHOST.octets());
+        msg.extend(server_addr.port().to_be_bytes());
+        socks.write_all(&msg).await.expect("request");
+        let mut resp = [0_u8; 22];
+        socks.read_exact(&mut resp).await.expect("response");
+        assert_eq!(&resp[0..4], &[5, 0, 0, 4]);
+
+        let msg = [1_u8, 2, 3, 4];
+        socks.write_all(&msg).await.expect("send"); 
+        let mut resp = [0_u8; 4];
+        socks.read_exact(&mut resp).await.expect("recv");
+        assert_eq!(msg, resp);
+    }
+
+    #[tokio::test]
+    async fn test_ipv6_domain() {
+        let mut socks = start_session(Ipv6Addr::LOCALHOST.into()).await;
+        let server_addr = start_echo_server(Ipv6Addr::LOCALHOST.into()).await;
+
+        let hostname = "localhost".as_bytes();
+        let mut msg = vec![5_u8, 1, 0, 3, hostname.len() as u8];
+        msg.extend(hostname);
+        msg.extend(server_addr.port().to_be_bytes());
+        socks.write_all(&msg).await.expect("request");
+        let mut resp = [0_u8; 22];
+        socks.read_exact(&mut resp).await.expect("response");
+        assert_eq!(&resp[0..4], &[5, 0, 0, 4]);
+
+        let msg = [1_u8, 2, 3, 4];
+        socks.write_all(&msg).await.expect("send"); 
+        let mut resp = [0_u8; 4];
+        socks.read_exact(&mut resp).await.expect("recv");
+        assert_eq!(msg, resp);
+    }
+}
 
