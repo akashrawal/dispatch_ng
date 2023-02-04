@@ -1,7 +1,7 @@
 linux:
   image: rust:alpine
   script:
-    - apk add build-base
+    - apk add build-base curl
     - export CARGO_HOME="$PWD/cargo"
     - cargo test
     - cargo build --release
@@ -19,7 +19,7 @@ linux:
 mingw-w64:
   image: rust:alpine
   script:
-    - apk add build-base mingw-w64-gcc
+    - apk add build-base mingw-w64-gcc curl
     - rustup target add x86_64-pc-windows-gnu
     - export CARGO_HOME="$PWD/cargo"
     - cargo build --release --target="x86_64-pc-windows-gnu"
