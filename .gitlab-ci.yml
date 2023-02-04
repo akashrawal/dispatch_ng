@@ -5,6 +5,7 @@ linux:
     - export CARGO_HOME="$PWD/cargo"
     - cargo test
     - cargo build --release
+    - ./deploy.sh
   artifacts:
     expire_in: 2 weeks
     when: always
@@ -22,6 +23,7 @@ mingw-w64:
     - rustup target add x86_64-pc-windows-gnu
     - export CARGO_HOME="$PWD/cargo"
     - cargo build --release --target="x86_64-pc-windows-gnu"
+    - ./deploy.sh
   artifacts:
     expire_in: 2 weeks
     when: always
