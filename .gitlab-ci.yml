@@ -1,7 +1,7 @@
 linux:
     image: rust:alpine
     script:
-      - apk add build_base
+      - apk add build-base
       - export CARGO_HOME="$PWD/cargo"
       - cargo test
       - cargo build --release
