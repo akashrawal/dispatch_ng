@@ -26,7 +26,7 @@ mingw-w64:
     expire_in: 2 weeks
     when: always
     paths:
-      - target/release/dispatch-ng.exe
+      - target/x86_64-pc-windows-gnu/release/dispatch-ng.exe
   cache:
     key: cargo-mingw-w64
     paths:
