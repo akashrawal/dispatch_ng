@@ -143,17 +143,17 @@ impl Balancer {
             let mut list = Vec::<(IpAddr, OrdWrapper<MetricState>)>::new();
             if take_v4 {
                 if let Some((addr, met)) = lock.v4_heap.peek() {
-                    list.push((IpAddr::V4(addr), met.clone()));
+                    list.push((IpAddr::V4(addr), met));
                 }
             }
             if take_v6 {
                 if let Some((addr, met)) = lock.v6_heap.peek() {
-                    list.push((IpAddr::V6(addr), met.clone()));
+                    list.push((IpAddr::V6(addr), met));
                 }
             }
             list.sort_by(|a, b| a.1.cmp(&b.1));
 
-            let addr = list.last()?.0.clone(); 
+            let addr = list.last()?.0; 
             lock.chg_use_count(addr, 1);
 
             addr

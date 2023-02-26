@@ -49,9 +49,9 @@ struct Args {
     threads : usize, 
 
     /// Addresses to offer SOCKS5 proxy. If not specified, it listens on 
-    /// localhost. 
+    /// localhost:1080. 
     #[arg(short, long)]
-    listen : Vec<Cow<'static, str>>,
+    bind : Vec<Cow<'static, str>>,
 
     /// List of addresses to load-balance across.
     addrs : Vec<String>, 
@@ -59,11 +59,11 @@ struct Args {
 
 //Async entry point
 async fn async_main(args : Args) {
-    //Default listening addresses
-    let listen_addrs = if args.listen.is_empty() {
+    //Default bind addresses
+    let listen_addrs = if args.bind.is_empty() {
         vec!["127.0.0.1:1080".into(), "[::1]:1080".into()]    
     } else {
-        args.listen
+        args.bind
     };
 
     enum ListenErr {
@@ -80,7 +80,7 @@ async fn async_main(args : Args) {
     let mut addrs = Vec::<(IpAddr, usize)>::new();
     for addr in args.addrs.into_iter() {
         let parseres : Result<(IpAddr, usize), String> = (|| {
-            let mut iter = addr.split("@");
+            let mut iter = addr.split('@');
             let addr_slice = iter.next()
                 .ok_or(String::from("Unable to extract IP address"))?;
             let ipaddr = IpAddr::from_str(addr_slice)

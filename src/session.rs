@@ -298,6 +298,8 @@ pub async fn enter(
 mod test {
     use super::*;
 
+    use std::marker::Unpin;
+
     use std::str::FromStr;
     use std::net::Ipv6Addr;
 
@@ -319,6 +321,14 @@ mod test {
         });
 
         addr
+    }
+
+    async fn test_echo_server(mut conn : impl AsyncRead + AsyncWrite + Unpin) {
+        let msg = [1_u8, 2, 3, 4];
+        conn.write_all(&msg).await.expect("send"); 
+        let mut resp = [0_u8; 4];
+        conn.read_exact(&mut resp).await.expect("recv");
+        assert_eq!(msg, resp);
     }
 
     async fn start_session(addr : IpAddr) -> impl AsyncRead + AsyncWrite {
@@ -351,11 +361,7 @@ mod test {
         socks.read_exact(&mut resp).await.expect("response");
         assert_eq!(&resp[0..4], &[5, 0, 0, 1]);
 
-        let msg = [1_u8, 2, 3, 4];
-        socks.write_all(&msg).await.expect("send"); 
-        let mut resp = [0_u8; 4];
-        socks.read_exact(&mut resp).await.expect("recv");
-        assert_eq!(msg, resp);
+        test_echo_server(socks).await;
     }
 
     #[tokio::test]
@@ -372,11 +378,7 @@ mod test {
         socks.read_exact(&mut resp).await.expect("response");
         assert_eq!(&resp[0..4], &[5, 0, 0, 1]);
 
-        let msg = [1_u8, 2, 3, 4];
-        socks.write_all(&msg).await.expect("send"); 
-        let mut resp = [0_u8; 4];
-        socks.read_exact(&mut resp).await.expect("recv");
-        assert_eq!(msg, resp);
+        test_echo_server(socks).await;
     }
 
     #[tokio::test]
@@ -392,11 +394,7 @@ mod test {
         socks.read_exact(&mut resp).await.expect("response");
         assert_eq!(&resp[0..4], &[5, 0, 0, 4]);
 
-        let msg = [1_u8, 2, 3, 4];
-        socks.write_all(&msg).await.expect("send"); 
-        let mut resp = [0_u8; 4];
-        socks.read_exact(&mut resp).await.expect("recv");
-        assert_eq!(msg, resp);
+        test_echo_server(socks).await;
     }
 
     #[tokio::test]
@@ -413,11 +411,7 @@ mod test {
         socks.read_exact(&mut resp).await.expect("response");
         assert_eq!(&resp[0..4], &[5, 0, 0, 4]);
 
-        let msg = [1_u8, 2, 3, 4];
-        socks.write_all(&msg).await.expect("send"); 
-        let mut resp = [0_u8; 4];
-        socks.read_exact(&mut resp).await.expect("recv");
-        assert_eq!(msg, resp);
+        test_echo_server(socks).await;
     }
 }
 
