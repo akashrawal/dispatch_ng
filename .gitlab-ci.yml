@@ -3,7 +3,7 @@ linux:
   script:
     - apk add build-base curl
     - export CARGO_HOME="$PWD/cargo"
-    - cargo test
+    - cargo test --release
     - cargo build --release
     - ./deploy.sh
   artifacts:
