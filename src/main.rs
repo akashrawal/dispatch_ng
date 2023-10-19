@@ -66,11 +66,6 @@ async fn async_main(args : Args) {
         args.bind
     };
 
-    enum ListenErr {
-        Bind(std::io::Error),
-        Accept(std::io::Error),
-    }
-
     //There should be atleast one address
     if args.addrs.is_empty() {
         panic!("No IP addresses provided for load balancing");

@@ -38,14 +38,14 @@ impl<T : EasyOrd> PartialEq for OrdWrapper<T> {
 impl<T : EasyOrd> Eq for OrdWrapper<T> {
 }
 
-impl<T : EasyOrd> PartialOrd for OrdWrapper<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.0.cmp(&other.0))
-    }
-}
-
 impl<T : EasyOrd> Ord for OrdWrapper<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
+    }
+}
+
+impl<T : EasyOrd> PartialOrd for OrdWrapper<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
